@@ -55,8 +55,7 @@ bool wxSliderPanel::Create(wxWindow* parent, const wxString& name, int sliderMin
 	Hide();
 
 	SetBackgroundColour(wxColour(64, 64, 64));
-	SetMinSize(FromDIP(wxSize(-1, 25)));
-	SetMaxSize(FromDIP(wxSize(-1, 25)));
+	SetMinSize(FromDIP(wxSize(-1, 35)));
 
 	sizer = new wxBoxSizer(wxHORIZONTAL);
 
@@ -97,8 +96,7 @@ bool wxSliderPanel::Create(wxWindow* parent, const wxString& name, int sliderMin
 
 	slider = new wxSlider();
 	slider->Create(this, wxID_ANY, 0, sliderMin, sliderMax, wxDefaultPosition, wxSize(-1, -1), wxSL_HORIZONTAL, wxDefaultValidator, name + "|slider");
-	slider->SetMinSize(FromDIP(wxSize(-1, 20)));
-	slider->SetMaxSize(FromDIP(wxSize(-1, 20)));
+	slider->SetMinSize(FromDIP(wxSize(-1, 30)));
 
 	sizer->Add(slider, 1, wxLEFT | wxRIGHT | wxEXPAND, 5);
 

@@ -3576,7 +3576,7 @@ int BodySlideApp::BuildListBodies(
 			wxXmlResource* rsrc = wxXmlResource::Get();
 			wxDialog* dlgBuildOverride = rsrc->LoadDialog(sliderView, "dlgBuildOverride");
 			dlgBuildOverride->SetSize(dlgBuildOverride->FromDIP(wxSize(800, 400)));
-			dlgBuildOverride->SetSizeHints(dlgBuildOverride->FromDIP(wxSize(400, 400)), dlgBuildOverride->FromDIP(wxSize(-1, -1)));
+			dlgBuildOverride->SetSizeHints(dlgBuildOverride->FromDIP(wxSize(400, 400)));
 			dlgBuildOverride->CenterOnParent();
 
 			wxScrolledWindow* scrollOverrides = XRCCTRL(*dlgBuildOverride, "scrollOverrides", wxScrolledWindow);
@@ -4551,7 +4551,10 @@ BodySlideFrame::BodySlideFrame(BodySlideApp* a, const wxSize& size)
 	sliderScroll = (wxScrolledWindow*)FindWindowByName("SliderScrollWindow", this);
 	if (sliderScroll) {
 		sliderScroll->SetScrollRate(5, 26);
-		sliderScroll->SetFocusIgnoringChildren();
+		// Impede que o painel role sozinho para o topo ao interagir com sliders no Linux/GTK
+		sliderScroll->Bind(wxEVT_CHILD_FOCUS, [](wxChildFocusEvent& WXUNUSED(event)) {
+			// Não faz nada e não chama Skip() para bloquear o auto-scroll
+		});
 		sliderScroll->Bind(wxEVT_ENTER_WINDOW, &BodySlideFrame::OnEnterSliderWindow, this);
 
 		sliderLayout = (wxFlexGridSizer*)sliderScroll->GetSizer();
@@ -4874,7 +4877,19 @@ void BodySlideFrame::OnSliderChange(wxScrollEvent& event) {
 		sd->sliderReadoutHi->ChangeValue(wxString::Format("%d%%", event.GetPosition()));
 
 	SetPresetChanged();
+	
+	// Preserva a posição do scroll para evitar pulos indesejados no Linux/GTK
+	int scrollX, scrollY;
+	sliderScroll->GetViewStart(&scrollX, &scrollY);
+	
 	app->UpdatePreview();
+	
+	// No Linux/GTK, o salto pode ocorrer de forma assíncrona. 
+	// Usamos CallAfter para garantir a restauração após o processamento da UI.
+	this->CallAfter([this, scrollX, scrollY]() {
+		if (this->sliderScroll)
+			this->sliderScroll->Scroll(scrollX, scrollY);
+	});
 }
 
 void BodySlideFrame::OnSliderReadoutChange(wxCommandEvent& event) {
@@ -5593,7 +5608,7 @@ void BodySlideFrame::OnBatchBuild(wxCommandEvent& WXUNUSED(event)) {
 		return;
 
 	batchBuildChooser->SetSize(batchBuildChooser->FromDIP(wxSize(650, 300)));
-	batchBuildChooser->SetSizeHints(batchBuildChooser->FromDIP(wxSize(650, 300)), batchBuildChooser->FromDIP(wxSize(650, -1)));
+	batchBuildChooser->SetSizeHints(batchBuildChooser->FromDIP(wxSize(650, 300)));
 	batchBuildChooser->CenterOnParent();
 
 	// Load BuildSelection file
@@ -6249,9 +6264,19 @@ bool SliderDisplay::Create(wxScrolledWindow* scrollWindow,
 		sliderLayout->Add(zapCheckLo, 0, wxALIGN_LEFT, 0);
 	}
 
-	sliderLo = new wxSlider(scrollWindow, wxID_ANY, 0, minValue, maxValue, wxDefaultPosition, wxSize(-1, scrollWindow->FromDIP(24)), wxSL_AUTOTICKS | wxSL_BOTTOM | wxSL_HORIZONTAL);
+	sliderLo = new wxSlider(scrollWindow, wxID_ANY, 0, minValue, maxValue, wxDefaultPosition, wxSize(-1, scrollWindow->FromDIP(32)), wxSL_AUTOTICKS | wxSL_BOTTOM | wxSL_HORIZONTAL);
 	sliderLo->SetTickFreq(5);
 	sliderLo->SetName(nameStr + "|LO");
+	
+	// Redireciona o scroll do mouse para o painel de rolagem (Scroll manual no Linux)
+	sliderLo->Bind(wxEVT_MOUSEWHEEL, [scrollWindow](wxMouseEvent& event) {
+		int rotation = event.GetWheelRotation();
+		int delta = event.GetWheelDelta();
+		if (delta > 0) {
+			int lines = rotation / delta;
+			scrollWindow->ScrollLines(-lines * 3); // 3 linhas por 'clique' da rodinha
+		}
+	});
 	sliderLo->Show(!oneSize && !isZap);
 
 	if (!oneSize && !isZap)
@@ -6276,9 +6301,19 @@ bool SliderDisplay::Create(wxScrolledWindow* scrollWindow,
 		sliderLayout->Add(zapCheckHi, 0, wxALIGN_LEFT, 0);
 	}
 
-	sliderHi = new wxSlider(scrollWindow, wxID_ANY, 0, minValue, maxValue, wxDefaultPosition, wxSize(-1, scrollWindow->FromDIP(24)), wxSL_AUTOTICKS | wxSL_HORIZONTAL);
+	sliderHi = new wxSlider(scrollWindow, wxID_ANY, 0, minValue, maxValue, wxDefaultPosition, wxSize(-1, scrollWindow->FromDIP(32)), wxSL_AUTOTICKS | wxSL_HORIZONTAL);
 	sliderHi->SetTickFreq(5);
 	sliderHi->SetName(nameStr + "|HI");
+
+	// Redireciona o scroll do mouse para o painel de rolagem (Scroll manual no Linux)
+	sliderHi->Bind(wxEVT_MOUSEWHEEL, [scrollWindow](wxMouseEvent& event) {
+		int rotation = event.GetWheelRotation();
+		int delta = event.GetWheelDelta();
+		if (delta > 0) {
+			int lines = rotation / delta;
+			scrollWindow->ScrollLines(-lines * 3);
+		}
+	});
 	sliderHi->Show(!isZap);
 
 	if (!isZap)

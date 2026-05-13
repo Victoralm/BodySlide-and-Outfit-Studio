@@ -24,7 +24,7 @@ PresetSaveDialog::PresetSaveDialog(wxWindow* parent) {
 
 	SetDoubleBuffered(true);
 	SetSize(FromDIP(wxSize(460, 300)));
-	SetSizeHints(FromDIP(wxSize(460, 300)), FromDIP(wxSize(460, -1)));
+	SetSizeHints(FromDIP(wxSize(460, 300)));
 	CenterOnParent();
 
 	wxSearchCtrl* search = new wxSearchCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, FromDIP(wxSize(200, -1)), wxTE_PROCESS_ENTER);
