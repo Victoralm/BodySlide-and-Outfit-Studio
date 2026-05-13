@@ -1,4 +1,4 @@
-﻿/*
+/*
 BodySlide and Outfit Studio
 
 This program is free software: you can redistribute it and/or modify
@@ -469,7 +469,7 @@ bool OutfitStudio::OnInit() {
 #ifdef _DEBUG
 	std::string dataDir{wxGetCwd().ToUTF8()};
 #else
-	std::string dataDir{wxStandardPaths::Get().GetDataDir().ToUTF8()};
+	std::string dataDir{wxPathOnly(wxStandardPaths::Get().GetExecutablePath()).ToUTF8()};
 #endif
 
 	Config.LoadConfig(dataDir + "/Config.xml");
@@ -4413,6 +4413,12 @@ void OutfitStudioFrame::UpdateReferenceTemplates() {
 
 	RefTemplateCollection refTemplateCol;
 	refTemplateCol.Load(GetProjectPath() + "/RefTemplates");
+
+	// Adiciona busca na pasta Data do jogo
+	std::string gameDataPath = Config["GameDataPath"];
+	if (!gameDataPath.empty()) {
+		refTemplateCol.Load(gameDataPath + "/CalienteTools/BodySlide/RefTemplates");
+	}
 	refTemplateCol.GetAll(refTemplates);
 }
 
@@ -8279,6 +8285,12 @@ void OutfitStudioFrame::OnLoadPreset(wxCommandEvent& WXUNUSED(event)) {
 	CloseBrushSettings();
 
 	presets.LoadPresets(GetProjectPath() + "/SliderPresets", choice, names, true);
+
+	// Adiciona busca na pasta Data do jogo
+	std::string gameDataPath = Config["GameDataPath"];
+	if (!gameDataPath.empty()) {
+		presets.LoadPresets(gameDataPath + "/CalienteTools/BodySlide/SliderPresets", choice, names, true);
+	}
 	presets.GetPresetNames(names);
 
 	if (wxXmlResource::Get()->LoadDialog(&dlg, this, "dlgChoosePreset")) {

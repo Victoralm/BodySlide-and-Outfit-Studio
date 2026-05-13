@@ -119,7 +119,7 @@ bool BodySlideApp::OnInit() {
 #ifdef _DEBUG
 	std::string dataDir{wxGetCwd().ToUTF8()};
 #else
-	std::string dataDir{wxStandardPaths::Get().GetDataDir().ToUTF8()};
+	std::string dataDir{wxPathOnly(wxStandardPaths::Get().GetExecutablePath()).ToUTF8()};
 #endif
 
 	Config.LoadConfig(dataDir + "/Config.xml");
@@ -558,7 +558,15 @@ int BodySlideApp::CreateSetSliders(const std::string& outfit) {
 		activeSet.Clear();
 		sliderManager.ClearSliders();
 		if (!sliderDoc.GetSet(outfit, activeSet)) {
-			activeSet.SetBaseDataPath(GetProjectPath() + PathSepStr + "ShapeData");
+			// Se o projeto (.osp) estiver na pasta Data do jogo, o ShapeData deve ser buscado lá também
+			std::string projectFile = outfitNameSource[outfit];
+			std::string gameDataPath = Config["GameDataPath"];
+			if (!gameDataPath.empty() && projectFile.find(gameDataPath) != std::string::npos) {
+				activeSet.SetBaseDataPath(gameDataPath + "/CalienteTools/BodySlide/ShapeData");
+			} else {
+				activeSet.SetBaseDataPath(GetProjectPath() + PathSepStr + "ShapeData");
+			}
+
 			sliderManager.AddSlidersInSet(activeSet);
 			DisplayActiveSet();
 		}
@@ -591,7 +599,13 @@ int BodySlideApp::AddProjectSliders(const std::string& projectFile, const std::s
 	if (sliderDoc.GetSet(setName, pp->sliderSet))
 		return 3;
 
-	pp->sliderSet.SetBaseDataPath(GetProjectPath() + PathSepStr + "ShapeData");
+	// Se o projeto (.osp) estiver na pasta Data do jogo, o ShapeData deve ser buscado lá também
+	std::string gameDataPath = Config["GameDataPath"];
+	if (!gameDataPath.empty() && projectFile.find(gameDataPath) != std::string::npos) {
+		pp->sliderSet.SetBaseDataPath(gameDataPath + "/CalienteTools/BodySlide/ShapeData");
+	} else {
+		pp->sliderSet.SetBaseDataPath(GetProjectPath() + PathSepStr + "ShapeData");
+	}
 	pp->setName = setName;
 
 	// Add sliders from this set (additive)
@@ -624,8 +638,17 @@ int BodySlideApp::LoadSliderSets() {
 	outFileCount.clear();
 
 	wxArrayString files;
-	wxDir::GetAllFiles(wxString::FromUTF8(GetProjectPath()) + "/SliderSets", &files, "*.osp");
-	wxDir::GetAllFiles(wxString::FromUTF8(GetProjectPath()) + "/SliderSets", &files, "*.xml");
+	wxString projectPath = wxString::FromUTF8(GetProjectPath());
+	wxString gameDataPath = wxString::FromUTF8(Config["GameDataPath"]);
+
+	wxDir::GetAllFiles(projectPath + "/SliderSets", &files, "*.osp");
+	wxDir::GetAllFiles(projectPath + "/SliderSets", &files, "*.xml");
+
+	// Adiciona busca na pasta Data do jogo (CalienteTools/BodySlide/SliderSets)
+	if (!gameDataPath.empty()) {
+		wxDir::GetAllFiles(gameDataPath + "/CalienteTools/BodySlide/SliderSets", &files, "*.osp");
+		wxDir::GetAllFiles(gameDataPath + "/CalienteTools/BodySlide/SliderSets", &files, "*.xml");
+	}
 
 	bool filterHasZaps = false;
 
@@ -1115,7 +1138,11 @@ void BodySlideApp::LaunchOutfitStudio(const wxString& args) {
 	const wxString osExec = "OutfitStudio";
 #endif
 
+#ifdef _WINDOWS
 	wxString osExecCmd = wxString::Format("\"%s\\%s\" %s", wxString::FromUTF8(Config["AppDir"]), osExec, args);
+#else
+	wxString osExecCmd = wxString::Format("\"%s/%s\" %s", wxString::FromUTF8(Config["AppDir"]), osExec, args);
+#endif
 
 	if (!wxExecute(osExecCmd, wxEXEC_ASYNC)) {
 		wxLogError("Failed to execute '%s' process.", osExecCmd);
@@ -2686,6 +2713,12 @@ void BodySlideApp::LoadAllCategories() {
 	wxLogMessage("Loading all slider categories...");
 	cCollection.Clear();
 	cCollection.LoadCategories(GetProjectPath() + "/SliderCategories");
+
+	// Adiciona busca na pasta Data do jogo
+	std::string gameDataPath = Config["GameDataPath"];
+	if (!gameDataPath.empty()) {
+		cCollection.LoadCategories(gameDataPath + "/CalienteTools/BodySlide/SliderCategories");
+	}
 }
 
 void BodySlideApp::SetPresetGroups(const std::string& setName) {
@@ -2716,6 +2749,12 @@ void BodySlideApp::SetPresetGroups(const std::string& setName) {
 void BodySlideApp::LoadAllGroups() {
 	wxLogMessage("Loading all slider groups...");
 	gCollection.LoadGroups(GetProjectPath() + "/SliderGroups");
+
+	// Adiciona busca na pasta Data do jogo
+	std::string gameDataPath = Config["GameDataPath"];
+	if (!gameDataPath.empty()) {
+		gCollection.LoadGroups(gameDataPath + "/CalienteTools/BodySlide/SliderGroups");
+	}
 
 	ungroupedOutfits.clear();
 	for (auto& o : outfitNameSource) {
@@ -2946,6 +2985,12 @@ void BodySlideApp::LoadPresets(const std::string& sliderSet) {
 	}
 
 	sliderManager.LoadPresets(GetProjectPath() + "/SliderPresets", outfit, groups_and_aliases, groups_and_aliases.empty());
+
+	// Adiciona busca na pasta Data do jogo
+	std::string gameDataPath = Config["GameDataPath"];
+	if (!gameDataPath.empty()) {
+		sliderManager.LoadPresets(gameDataPath + "/CalienteTools/BodySlide/SliderPresets", outfit, groups_and_aliases, groups_and_aliases.empty());
+	}
 }
 
 void BodySlideApp::GetPresetNames(std::vector<std::string>& outNames) {
@@ -4231,6 +4276,12 @@ void BodySlideApp::GroupBuild(const std::vector<std::string>& groupNames) {
 
 	std::vector<std::string> groups;
 	sliderManager.LoadPresets(GetProjectPath() + "/SliderPresets", "", groups, true);
+
+	// Adiciona busca na pasta Data do jogo
+	std::string gameDataPath = Config["GameDataPath"];
+	if (!gameDataPath.empty()) {
+		sliderManager.LoadPresets(gameDataPath + "/CalienteTools/BodySlide/SliderPresets", "", groups, true);
+	}
 
 	// Apply saved build selections for CLI group builds before entering batch build conflict handling.
 	BuildSelectionFile buildSelFile;

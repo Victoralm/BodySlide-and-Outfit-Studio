@@ -501,7 +501,7 @@ std::string SliderSet::GetInputFileName() {
 	std::string o;
 	o = baseDataPath + PathSepStr;
 	o += datafolder + PathSepStr;
-	o += inputfile;
+	o += ToOSSlashes(inputfile);
 	return o;
 }
 

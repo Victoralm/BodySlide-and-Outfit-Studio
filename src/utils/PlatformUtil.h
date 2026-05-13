@@ -24,6 +24,7 @@ std::wstring MultiByteToWideUTF8(const std::string& str);
 
 void OpenFileStream(std::fstream& file, const std::string& fileName, std::ios_base::openmode mode);
 bool FileExists(const std::string& fileName);
+std::string FindFilePathCaseInsensitive(const std::string& path);
 
 // Provide std::wstring function for Windows
 #ifdef _WINDOWS

@@ -5,6 +5,7 @@ See the included LICENSE file
 
 #include "../render/GLMaterial.h"
 #include "../utils/ConfigurationManager.h"
+#include "../utils/PlatformUtil.h"
 
 #include "../FSEngine/FSEngine.h"
 #include "../FSEngine/FSManager.h"
@@ -22,7 +23,8 @@ ResourceLoader::~ResourceLoader() {
 
 bool ResourceLoader::extChecked = false;
 
-GLuint ResourceLoader::LoadTexture(const std::string& inFileName, bool isCubeMap, bool reloadTextures) {
+GLuint ResourceLoader::LoadTexture(const std::string& inFileNameOriginal, bool isCubeMap, bool reloadTextures) {
+	std::string inFileName = PlatformUtil::FindFilePathCaseInsensitive(inFileNameOriginal);
 	auto ti = textures.find(inFileName);
 	if (!reloadTextures) {
 		// Return existing texture index
@@ -60,13 +62,21 @@ GLuint ResourceLoader::LoadTexture(const std::string& inFileName, bool isCubeMap
 
 		wxMemoryBuffer data;
 		wxString texFile = inFileName;
-		texFile.Replace(wxString(Config["GameDataPath"]), "");
+		wxString gameDataPath = Config["GameDataPath"];
+		if (texFile.StartsWith(gameDataPath)) {
+			texFile = texFile.Mid(gameDataPath.length());
+		}
 		texFile.Replace("\\", "/");
+		while (texFile.StartsWith("/") || texFile.StartsWith("\\")) {
+			texFile = texFile.Mid(1);
+		}
+		std::string texFileStr = texFile.ToStdString();
+
 		for (FSArchiveFile* archive : FSManager::archiveList()) {
 			if (archive) {
-				if (archive->hasFile(texFile.ToStdString())) {
+				if (archive->hasFile(texFileStr)) {
 					wxMemoryBuffer outData;
-					archive->fileContents(texFile.ToStdString(), outData);
+					archive->fileContents(texFileStr, outData);
 
 					if (!outData.IsEmpty()) {
 						data = std::move(outData);

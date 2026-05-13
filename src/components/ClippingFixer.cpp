@@ -9,6 +9,7 @@ See the included LICENSE file
 
 #include <algorithm>
 #include <cmath>
+#include <cfloat>
 #include <unordered_set>
 
 using namespace nifly;

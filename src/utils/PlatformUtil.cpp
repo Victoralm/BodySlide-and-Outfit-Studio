@@ -16,6 +16,15 @@ std::string backslash_to_slash(const std::string& s) {
 }
 } // namespace
 
+#include <algorithm>
+#include <fstream>
+#include <string>
+
+#ifndef _WINDOWS
+#include <filesystem>
+namespace fs = std::filesystem;
+#endif
+
 namespace PlatformUtil {
 #ifdef _WINDOWS
 // ACP wide to multibyte
@@ -75,6 +84,55 @@ bool FileExists(const std::wstring& fileName) {
 		return false;
 
 	return true;
+}
+#endif
+#ifndef _WINDOWS
+std::string FindFilePathCaseInsensitive(const std::string& path) {
+	std::string p = backslash_to_slash(path);
+	if (fs::exists(p)) return p;
+
+	fs::path current = "/";
+	fs::path target(p);
+	
+	// Se for caminho relativo, começa do diretório atual
+	if (!target.is_absolute())
+		current = fs::current_path();
+	else
+		current = target.root_path();
+
+	for (auto& part : target) {
+		if (part == target.root_path() || part.string() == "/") continue;
+		
+		bool found = false;
+		if (fs::exists(current / part)) {
+			current /= part;
+			found = true;
+		} else {
+			// Busca insensível no diretório atual
+			std::string partLower = part.string();
+			std::transform(partLower.begin(), partLower.end(), partLower.begin(), ::tolower);
+			
+			if (fs::is_directory(current)) {
+				for (const auto& entry : fs::directory_iterator(current)) {
+					std::string entryName = entry.path().filename().string();
+					std::string entryLower = entryName;
+					std::transform(entryLower.begin(), entryLower.end(), entryLower.begin(), ::tolower);
+					
+					if (entryLower == partLower) {
+						current /= entryName;
+						found = true;
+						break;
+					}
+				}
+			}
+		}
+		if (!found) return p; // Retorna o original se não achar
+	}
+	return current.string();
+}
+#else
+std::string FindFilePathCaseInsensitive(const std::string& path) {
+	return path;
 }
 #endif
 } // namespace PlatformUtil

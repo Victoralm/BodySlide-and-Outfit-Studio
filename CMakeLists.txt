@@ -4,11 +4,19 @@ project(BSOS)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# Coloca os executáveis e recursos em uma pasta limpa chamada 'bin'
+set(OUTPUT_DIR ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${OUTPUT_DIR})
+
 find_package(wxWidgets REQUIRED gl core base net xrc adv qa html propgrid)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
-set(fbxsdk_dir ../fbxsdk)
-find_library(fbxsdk fbxsdk PATHS ${fbxsdk_dir}/lib/gcc/x64/release)
+set(fbxsdk_dir "" CACHE PATH "Directory of FBX SDK")
+if(fbxsdk_dir)
+	find_library(fbxsdk fbxsdk PATHS ${fbxsdk_dir}/lib/gcc/x64/release ${fbxsdk_dir}/lib NO_DEFAULT_PATH)
+else()
+	find_library(fbxsdk fbxsdk)
+endif()
 
 set(commonsources
 	lib/FSEngine/FSBSA.cpp
@@ -117,6 +125,7 @@ target_compile_definitions(OutfitStudio PRIVATE USE_FBXSDK)
 include(${wxWidgets_USE_FILE})
 target_include_directories(OutfitStudio SYSTEM PRIVATE
 	${fbxsdk_dir}/include
+	/usr/include
 	/usr/include/wine/windows
 	)
 target_include_directories(BodySlide SYSTEM PRIVATE
@@ -149,3 +158,10 @@ target_link_libraries(BodySlide
 	${OPENGL_LIBRARIES}
 	${GLEW_LIBRARIES}
 	xml2)
+
+# --- Automação para Build Local (Linux) ---
+# Copia a pasta de recursos e arquivos de configuração para o diretório de saída limpo
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/res" DESTINATION "${OUTPUT_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Config.xml" DESTINATION "${OUTPUT_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/BodySlide.xml" DESTINATION "${OUTPUT_DIR}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/OutfitStudio.xml" DESTINATION "${OUTPUT_DIR}")

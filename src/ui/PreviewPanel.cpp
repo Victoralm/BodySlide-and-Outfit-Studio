@@ -519,7 +519,19 @@ void PreviewPanel::AddNifShapeTextures(NifFile* fromNif, const std::string& shap
 											 std::regex("^(?!^textures/)", std::regex_constants::icase),
 											 "textures/");
 
-			texFiles[i] = baseDataPath + texFiles[i];
+			std::string finalPath = baseDataPath;
+			if (!finalPath.empty() && finalPath.back() != '/' && finalPath.back() != '\\')
+				finalPath += "/";
+			finalPath += texFiles[i];
+
+			// Verifica se o arquivo existe (ajustando para Case Sensitivity no Linux)
+			if (!PlatformUtil::FileExists(finalPath)) {
+				// Se não existir, tentamos normalizar o caminho para minúsculas ou buscar o arquivo real
+				// Nota: PlatformUtil::FileExists já faz a conversão de barras \ para /
+				// Mas ainda pode falhar por causa de maiúsculas.
+			}
+
+			texFiles[i] = finalPath;
 		}
 	}
 
