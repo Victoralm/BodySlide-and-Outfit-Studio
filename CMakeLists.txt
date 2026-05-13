@@ -4,8 +4,8 @@ project(BSOS)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Coloca os executáveis e recursos em uma pasta limpa chamada 'bin'
-set(OUTPUT_DIR ${CMAKE_BINARY_DIR}/bin)
+# Coloca os executáveis e recursos na estrutura padrão de mods do Skyrim
+set(OUTPUT_DIR ${CMAKE_BINARY_DIR}/bin/CalienteTools/BodySlide)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${OUTPUT_DIR})
 
 find_package(wxWidgets REQUIRED gl core base net xrc adv qa html propgrid)
@@ -165,3 +165,26 @@ file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/res" DESTINATION "${OUTPUT_DIR}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Config.xml" DESTINATION "${OUTPUT_DIR}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/BodySlide.xml" DESTINATION "${OUTPUT_DIR}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/OutfitStudio.xml" DESTINATION "${OUTPUT_DIR}")
+
+# Cria as pastas obrigatórias para o funcionamento do programa
+file(MAKE_DIRECTORY "${OUTPUT_DIR}/SliderPresets")
+file(MAKE_DIRECTORY "${OUTPUT_DIR}/SliderGroups")
+file(MAKE_DIRECTORY "${OUTPUT_DIR}/SliderSets")
+file(MAKE_DIRECTORY "${OUTPUT_DIR}/ShapeData")
+file(MAKE_DIRECTORY "${OUTPUT_DIR}/PoseData")
+file(MAKE_DIRECTORY "${OUTPUT_DIR}/RefTemplates")
+
+# --- Automação de Empacotamento (Snapshot) ---
+string(TIMESTAMP TODAY "%m-%d-%Y")
+set(ARCHIVE_NAME "Bodyslide_snapshot-${TODAY}.7z")
+
+# Tenta encontrar o 7-Zip no sistema (seja Windows ou Linux)
+find_program(7Z_EXECUTABLE NAMES 7z 7za 7z.exe)
+if(7Z_EXECUTABLE)
+    add_custom_command(TARGET OutfitStudio POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "Packaging snapshot: ${ARCHIVE_NAME}..."
+        COMMAND ${7Z_EXECUTABLE} a -t7z "${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}" "."
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        COMMENT "Creating 7zip snapshot with standard mod structure"
+    )
+endif()
