@@ -6,8 +6,7 @@ See the included LICENSE file
 #pragma once
 
 #include <map>
-#include <string>
-#include <vector>
+#include "../utils/StringStuff.h"
 
 class SliderPreset {
 public:
@@ -16,9 +15,9 @@ public:
 };
 
 class PresetCollection {
-	std::map<std::string, std::map<std::string, SliderPreset>> namedSliderPresets;
-	std::map<std::string, std::string> presetFileNames;
-	std::map<std::string, std::vector<std::string>> presetGroups;
+	std::map<std::string, std::map<std::string, SliderPreset, case_insensitive_compare>, case_insensitive_compare> namedSliderPresets;
+	std::map<std::string, std::string, case_insensitive_compare> presetFileNames;
+	std::map<std::string, std::vector<std::string>, case_insensitive_compare> presetGroups;
 
 public:
 	void Clear();

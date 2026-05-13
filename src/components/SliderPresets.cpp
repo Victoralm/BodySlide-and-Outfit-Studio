@@ -37,7 +37,7 @@ void PresetCollection::AddEmptyPreset(const std::string& set) {
 }
 
 void PresetCollection::SetSliderPreset(const std::string& set, const std::string& slider, float big, float small) {
-	std::map<std::string, SliderPreset> newPreset;
+	std::map<std::string, SliderPreset, case_insensitive_compare> newPreset;
 	SliderPreset sp;
 	if (namedSliderPresets.find(set) == namedSliderPresets.end()) {
 		sp.big = sp.small = -10000.0f;

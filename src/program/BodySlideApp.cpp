@@ -4738,7 +4738,7 @@ void BodySlideFrame::PopulateOutfitList(const wxArrayString& items, const wxStri
 		int i = wxNOT_FOUND;
 		if (selectItem.empty())
 			i = outfitChoice->Append("");
-		else if (selectItem.First('['))
+		else if (selectItem.First('[') != wxNOT_FOUND)
 			i = outfitChoice->Append("[" + selectItem + "]");
 		else
 			i = outfitChoice->Append(selectItem);
@@ -4757,7 +4757,7 @@ void BodySlideFrame::PopulatePresetList(const wxArrayString& items, const wxStri
 		int i = wxNOT_FOUND;
 		if (selectItem.empty())
 			i = presetChoice->Append("");
-		else if (selectItem.First('['))
+		else if (selectItem.First('[') != wxNOT_FOUND)
 			i = presetChoice->Append("[" + selectItem + "]");
 		else
 			i = presetChoice->Append(selectItem);
