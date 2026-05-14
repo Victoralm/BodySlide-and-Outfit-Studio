@@ -4,6 +4,7 @@ See the included LICENSE file
 */
 
 #include "GLExtensions.h"
+#include <wx/log.h>
 #include <string>
 
 bool extInitialized = false;
@@ -176,6 +177,8 @@ bool IsExtensionSupported(const char* ext) {
 void InitExtensions() {
 	if (extInitialized)
 		return;
+
+	glewExperimental = GL_TRUE;
 	GLenum err = glewInit();
 	// TODO: figure out why we're getting GLEW_ERROR_NO_GLX_DISPLAY (error
 	// code 4) with gtk3 builds of wxWidgets and fix it.  Everything still
@@ -184,7 +187,16 @@ void InitExtensions() {
 		fprintf(stderr, "Error (%d): %s\n", (int)err, glewGetErrorString(err));
 		abort();
 	}
+
 	extGLISupported = glTexStorage1D && glTexStorage2D && glTexStorage3D && glTexSubImage3D && glCompressedTexSubImage1D && glCompressedTexSubImage2D && glCompressedTexSubImage3D;
+	
+	if (!extGLISupported) {
+		wxLogMessage("GLExtensions: Some required texture storage functions are NULL!");
+		if (!glTexStorage2D) wxLogMessage("  - glTexStorage2D is NULL");
+		if (!glCompressedTexSubImage2D) wxLogMessage("  - glCompressedTexSubImage2D is NULL");
+	} else {
+		wxLogMessage("GLExtensions: extGLISupported is TRUE");
+	}
 	extSupported = glGetStringi && glGenVertexArrays && glBindVertexArray && glDeleteVertexArrays && glCreateShader && glShaderSource && glCompileShader && glCreateProgram
 				   && glAttachShader && glLinkProgram && glUseProgram && glGetShaderiv && glGetShaderInfoLog && glGetProgramiv && glGetProgramInfoLog && glDisableVertexAttribArray
 				   && glEnableVertexAttribArray && glVertexAttribPointer && glGenBuffers && glDeleteBuffers && glBindBuffer && glBufferData && glBufferSubData

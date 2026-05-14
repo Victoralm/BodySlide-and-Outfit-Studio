@@ -45,19 +45,22 @@ public:
 	}
 
 	int SavePreset(const std::string& filePath, const std::string& presetName, const std::string& sliderSetName, std::vector<std::string>& assignGroups) {
-		int index = 0;
-		for (auto& s : slidersBig) {
-			if (SliderHasChanged(s.name, true))
-				presetCollection.SetSliderPreset(presetName, s.name, s.value);
-			else
-				presetCollection.ClearSlider(presetName, s.name, true);
+		size_t smallSize = slidersSmall.size();
+		for (size_t i = 0; i < slidersBig.size(); ++i) {
+			const Slider& sBig = slidersBig[i];
 
-			if (SliderHasChanged(s.name, false))
-				presetCollection.SetSliderPreset(presetName, slidersSmall[index].name, -10000.0f, slidersSmall[index].value);
+			if (sBig.defValue != sBig.value || (sBig.changed && sBig.zap))
+				presetCollection.SetSliderPreset(presetName, sBig.name, sBig.value);
 			else
-				presetCollection.ClearSlider(presetName, slidersSmall[index].name, false);
+				presetCollection.ClearSlider(presetName, sBig.name, true);
 
-			index++;
+			if (i < smallSize) {
+				const Slider& sSmall = slidersSmall[i];
+				if (sSmall.defValue != sSmall.value || (sSmall.changed && sSmall.zap))
+					presetCollection.SetSliderPreset(presetName, sSmall.name, -10000.0f, sSmall.value);
+				else
+					presetCollection.ClearSlider(presetName, sSmall.name, false);
+			}
 		}
 		return presetCollection.SavePreset(filePath, presetName, sliderSetName, assignGroups);
 	}

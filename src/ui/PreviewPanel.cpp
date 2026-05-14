@@ -426,12 +426,15 @@ void PreviewPanel::RefreshMeshFromNif(const std::vector<NifFile*>& nifs) {
 	gls.RenderOneFrame();
 }
 
-void PreviewPanel::AddNifShapeTextures(NifFile* fromNif, const std::string& shapeName) {
-	bool hasMat = false;
-	std::string matFile;
+void PreviewPanel::AddNifShapeTextures(nifly::NifFile* fromNif, const std::string& shapeName) {
+	wxLogMessage("PreviewPanel: Processing shape '%s'", shapeName);
+
 
 	const uint8_t MAX_TEXTURE_PATHS = 10;
 	std::vector<std::string> texFiles(MAX_TEXTURE_PATHS);
+
+	bool hasMat = false;
+	std::string matFile;
 
 	NiShader* shader = nullptr;
 	auto shape = fromNif->FindBlockByName<NiShape>(shapeName);

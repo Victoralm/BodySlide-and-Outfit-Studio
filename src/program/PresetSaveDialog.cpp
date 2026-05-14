@@ -93,6 +93,12 @@ void PresetSaveDialog::CheckGroup(wxCommandEvent& event) {
 
 void PresetSaveDialog::OnSave(wxCommandEvent& WXUNUSED(event)) {
 	outPresetName = XRCCTRL((*this), "spPresetName", wxTextCtrl)->GetValue().ToUTF8();
+
+	if (outPresetName.empty()) {
+		wxMessageBox(_("Please enter a name for the preset."), _("Invalid Name"), wxICON_WARNING, this);
+		return;
+	}
+
 	std::string presetFile = outPresetName + ".xml";
 
 	wxFileDialog savePresetDialog(this,
@@ -100,11 +106,11 @@ void PresetSaveDialog::OnSave(wxCommandEvent& WXUNUSED(event)) {
 								  wxString::FromUTF8(GetProjectPath()) + "/SliderPresets",
 								  wxString::FromUTF8(presetFile),
 								  "Preset Files (*.xml)|*.xml",
-								  wxFD_SAVE);
+								  wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	if (savePresetDialog.ShowModal() == wxID_OK) {
 		outFileName = savePresetDialog.GetPath().ToUTF8();
 		outGroups.assign(selectedGroups.begin(), selectedGroups.end());
-		wxDialog::Close();
+		EndModal(wxID_OK);
 	}
 }
 

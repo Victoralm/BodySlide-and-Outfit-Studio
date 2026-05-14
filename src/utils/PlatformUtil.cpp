@@ -4,6 +4,17 @@ See the included LICENSE file
 */
 
 #include "PlatformUtil.h"
+#include <wx/log.h>
+#include <wx/utils.h>
+#include <wx/filefn.h>
+#include <wx/dir.h>
+#include <wx/tokenzr.h>
+#include <wx/filename.h>
+
+#include <iostream>
+#include <fstream>
+#include <algorithm>
+#include <filesystem>
 
 namespace {
 std::string backslash_to_slash(const std::string& s) {
@@ -126,8 +137,16 @@ std::string FindFilePathCaseInsensitive(const std::string& path) {
 				}
 			}
 		}
-		if (!found) return p; // Retorna o original se não achar
+		if (!found) {
+			wxLogMessage("FindFilePathCaseInsensitive: Failed to find part '%s' in '%s'", part.string(), current.string());
+			return p;
+		}
 	}
+	
+	if (current.string() != p) {
+		wxLogMessage("FindFilePathCaseInsensitive: Resolved '%s' to '%s'", p, current.string());
+	}
+
 	return current.string();
 }
 #else

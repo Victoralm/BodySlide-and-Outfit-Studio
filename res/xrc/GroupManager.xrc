@@ -3,7 +3,7 @@
 	<object class="wxDialog" name="dlgGroupManager">
 		<style>wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER</style>
 		<size>800,500</size>
-		<bg>#f0f0f0</bg>
+		<bg>#404040</bg>
 		<title>Group Manager</title>
 		<centered>1</centered>
 		<object class="wxBoxSizer">
@@ -14,6 +14,7 @@
 				<border>5</border>
 				<object class="wxStaticText" name="lbHeader">
 					<style>wxALIGN_CENTRE</style>
+					<fg>#c8c8c8</fg>
 					<label>Choose a group and add or remove members by selecting them in the lists.</label>
 					<wrap>-1</wrap>
 				</object>
@@ -69,6 +70,14 @@
 						<object class="wxStaticBoxSizer">
 							<orient>wxVERTICAL</orient>
 							<label>Groups</label>
+							<font>
+								<size>10</size>
+								<family>default</family>
+								<style>normal</style>
+								<weight>normal</weight>
+								<underlined>0</underlined>
+								<face></face>
+							</font>
 							<object class="sizeritem">
 								<option>1</option>
 								<flag>wxEXPAND|wxALL</flag>
@@ -120,6 +129,14 @@
 								<object class="wxStaticBoxSizer">
 									<orient>wxVERTICAL</orient>
 									<label>Members</label>
+									<font>
+										<size>10</size>
+										<family>default</family>
+										<style>normal</style>
+										<weight>normal</weight>
+										<underlined>0</underlined>
+										<face></face>
+									</font>
 									<object class="sizeritem">
 										<option>1</option>
 										<flag>wxALL|wxEXPAND</flag>
@@ -149,6 +166,14 @@
 						<object class="wxStaticBoxSizer">
 							<orient>wxVERTICAL</orient>
 							<label>Outfits</label>
+							<font>
+								<size>10</size>
+								<family>default</family>
+								<style>normal</style>
+								<weight>normal</weight>
+								<underlined>0</underlined>
+								<face></face>
+							</font>
 							<object class="sizeritem">
 								<option>0</option>
 								<flag>wxALL|wxEXPAND</flag>

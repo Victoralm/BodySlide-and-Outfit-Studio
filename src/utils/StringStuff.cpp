@@ -3,8 +3,10 @@
 #include <sstream>
 
 bool StringsEqualNInsens(const char* a, const char* b, int len) {
+	if (a == b) return true;
+	if (!a || !b) return false;
 	while (len > 0) {
-		if (std::tolower(*a) != std::tolower(*b))
+		if (std::tolower((unsigned char)*a) != std::tolower((unsigned char)*b))
 			return false;
 		if (*a == '\0')
 			return true;
@@ -14,8 +16,10 @@ bool StringsEqualNInsens(const char* a, const char* b, int len) {
 }
 
 bool StringsEqualInsens(const char* a, const char* b) {
+	if (a == b) return true;
+	if (!a || !b) return false;
 	while (true) {
-		if (std::tolower(*a) != std::tolower(*b))
+		if (std::tolower((unsigned char)*a) != std::tolower((unsigned char)*b))
 			return false;
 		if (*a == '\0')
 			return true;

@@ -49,12 +49,22 @@ GLuint ResourceLoader::LoadTexture(const std::string& inFileNameOriginal, bool i
 	// Cubemap fallback (SOIL)
 	if (!textureID && isCubeMap)
 		textureID = SOIL_load_OGL_single_cubemap(inFileName.c_str(), SOIL_DDS_CUBEMAP_FACE_ORDER, SOIL_LOAD_AUTO, textureID, SOIL_FLAG_GL_MIPMAPS);
+	
+	if (!textureID && (fileExtStr == "dds" || fileExtStr == "ktx")) {
+		wxLogMessage("ResourceLoader: GLI failed to load '%s'", inFileName);
+	}
 
 	// Texture and image fallback (SOIL)
 	if (!textureID)
 		textureID = SOIL_load_OGL_texture(inFileName.c_str(), SOIL_LOAD_AUTO, textureID, SOIL_FLAG_TEXTURE_REPEATS | SOIL_FLAG_MIPMAPS | SOIL_FLAG_GL_MIPMAPS);
 
+	if (textureID != 0) {
+		textures[inFileName] = textureID;
+		return textureID;
+	}
+
 	if (!textureID && Config.MatchValue("BSATextureScan", "true")) {
+		wxLogMessage("ResourceLoader: '%s' not found as loose file, scanning BSAs...", inFileName);
 		if (Config["GameDataPath"].empty()) {
 			wxLogWarning("Texture file '%s' not found.", inFileName);
 			return 0;

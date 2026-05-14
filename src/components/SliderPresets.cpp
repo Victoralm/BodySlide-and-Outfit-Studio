@@ -168,7 +168,8 @@ bool PresetCollection::LoadPresets(const std::string& basePath, const std::strin
 
 			g = element->FirstChildElement("Group");
 			while (g) {
-				std::string groupName = g->Attribute("name");
+				const char* nameAttr = g->Attribute("name");
+				std::string groupName = nameAttr ? nameAttr : "";
 				groups.push_back(groupName);
 
 				for (auto& filter : groupFilter) {
@@ -179,7 +180,8 @@ bool PresetCollection::LoadPresets(const std::string& basePath, const std::strin
 				}
 				g = g->NextSiblingElement("Group");
 			}
-			if (element->Attribute("set") == sliderSet || allPresets)
+			const char* setAttr = element->Attribute("set");
+			if ((setAttr && setAttr == sliderSet) || allPresets)
 				skip = false;
 
 			if (skip) {
@@ -187,11 +189,12 @@ bool PresetCollection::LoadPresets(const std::string& basePath, const std::strin
 				continue;
 			}
 
-			presetName = element->Attribute("name");
-			if (presetFileNames.find(presetName) != presetFileNames.end()) {
+			const char* nameAttr = element->Attribute("name");
+			if (!nameAttr || (presetFileNames.find(nameAttr) != presetFileNames.end())) {
 				element = element->NextSiblingElement("Preset");
 				continue;
 			}
+			presetName = nameAttr;
 
 			presetFileNames[presetName] = file.ToUTF8();
 			presetGroups[presetName] = groups;
@@ -200,8 +203,14 @@ bool PresetCollection::LoadPresets(const std::string& basePath, const std::strin
 
 			setSlider = element->FirstChildElement("SetSlider");
 			while (setSlider) {
-				sliderName = setSlider->Attribute("name");
-				applyTo = setSlider->Attribute("size");
+				const char* sNameAttr = setSlider->Attribute("name");
+				const char* sSizeAttr = setSlider->Attribute("size");
+				if (!sNameAttr || !sSizeAttr) {
+					setSlider = setSlider->NextSiblingElement("SetSlider");
+					continue;
+				}
+				sliderName = sNameAttr;
+				applyTo = sSizeAttr;
 				o = setSlider->FloatAttribute("value") / 100.0f;
 				s = b = -10000.0f;
 				if (applyTo == "small")

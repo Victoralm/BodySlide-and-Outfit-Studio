@@ -2442,6 +2442,25 @@ bool BodySlideApp::SetDefaultConfig() {
 	}
 #endif
 
+#ifndef _WINDOWS
+	// Normalize GameDataPath on Linux to ensure it ends with /Data/
+	if (!Config["GameDataPath"].empty()) {
+		wxString gdp = Config["GameDataPath"];
+		if (!gdp.EndsWith(PathSepChar))
+			gdp.Append(PathSepChar);
+
+		// If it's a Bethesda game and doesn't end with Data/, append it
+		// (Except for Starfield which uses different structure, but BodySlide usually expects Data/)
+		if (!gdp.Lower().EndsWith(wxString("data") + PathSepChar)) {
+			wxString dataPath = gdp + "Data" + PathSepChar;
+			if (wxDirExists(dataPath)) {
+				gdp = dataPath;
+				Config.SetValue("GameDataPath", gdp.ToUTF8().data());
+			}
+		}
+	}
+#endif
+
 	if (Config["GameDataPath"].empty()) {
 		if (Config["WarnMissingGamePath"] == "true") {
 			wxLogWarning("Failed to find game install path registry key or GameDataPath in the config.");
