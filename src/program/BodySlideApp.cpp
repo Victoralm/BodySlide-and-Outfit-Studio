@@ -22,9 +22,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "../utils/StringStuff.h"
 
 #include <atomic>
+#include <future>
+#include <memory>
+#include <mutex>
 #include <regex>
-#include <wx/wrapsizer.h>
+#include <unordered_map>
 #include <wx/debugrpt.h>
+#include <wx/wrapsizer.h>
+#include <queue>
 
 #ifdef WIN64
 #include <concurrent_unordered_map.h>
@@ -39,7 +44,8 @@ using namespace nifly;
 ConfigurationManager Config;
 ConfigurationManager BodySlideConfig;
 
-const std::array<wxString, 10> TargetGames = {"Fallout3", "FalloutNewVegas", "Skyrim", "Fallout4", "SkyrimSpecialEdition", "Fallout4VR", "SkyrimVR", "Fallout76", "Oblivion", "Starfield"};
+const std::array<wxString, 10> TargetGames
+	= {"Fallout3", "FalloutNewVegas", "Skyrim", "Fallout4", "SkyrimSpecialEdition", "Fallout4VR", "SkyrimVR", "Fallout76", "Oblivion", "Starfield"};
 const std::array<wxLanguage, 37> SupportedLangs = {wxLANGUAGE_ENGLISH,	  wxLANGUAGE_AFRIKAANS,		   wxLANGUAGE_ARABIC,  wxLANGUAGE_CATALAN,	  wxLANGUAGE_CZECH,
 												   wxLANGUAGE_DANISH,	  wxLANGUAGE_GERMAN,		   wxLANGUAGE_GREEK,   wxLANGUAGE_SPANISH,	  wxLANGUAGE_BASQUE,
 												   wxLANGUAGE_FINNISH,	  wxLANGUAGE_FRENCH,		   wxLANGUAGE_HINDI,   wxLANGUAGE_HUNGARIAN,  wxLANGUAGE_INDONESIAN,
@@ -127,7 +133,17 @@ bool BodySlideApp::OnInit() {
 
 	Config.SetDefaultValue("AppDir", dataDir);
 
-	logger.Initialize(Config.GetIntValue("LogLevel", -1), dataDir + "/Log_BS.txt");
+	std::string logPath = dataDir + "/Log_BS.txt";
+	if (wxFileName::FileExists(logPath)) {
+		wxFileName fn(logPath);
+		if (fn.GetSize() > 10 * 1024 * 1024) {
+			wxString oldLog = dataDir + "/Log_BS.old.txt";
+			if (wxFileName::FileExists(oldLog))
+				wxRemoveFile(oldLog);
+			wxRenameFile(logPath, oldLog);
+		}
+	}
+	logger.Initialize(Config.GetIntValue("LogLevel", -1), logPath);
 	wxLogMessage("Initializing BodySlide...");
 
 #ifdef NDEBUG
@@ -563,7 +579,8 @@ int BodySlideApp::CreateSetSliders(const std::string& outfit) {
 			std::string gameDataPath = Config["GameDataPath"];
 			if (!gameDataPath.empty() && projectFile.find(gameDataPath) != std::string::npos) {
 				activeSet.SetBaseDataPath(gameDataPath + "/CalienteTools/BodySlide/ShapeData");
-			} else {
+			}
+			else {
 				activeSet.SetBaseDataPath(GetProjectPath() + PathSepStr + "ShapeData");
 			}
 
@@ -603,7 +620,8 @@ int BodySlideApp::AddProjectSliders(const std::string& projectFile, const std::s
 	std::string gameDataPath = Config["GameDataPath"];
 	if (!gameDataPath.empty() && projectFile.find(gameDataPath) != std::string::npos) {
 		pp->sliderSet.SetBaseDataPath(gameDataPath + "/CalienteTools/BodySlide/ShapeData");
-	} else {
+	}
+	else {
 		pp->sliderSet.SetBaseDataPath(GetProjectPath() + PathSepStr + "ShapeData");
 	}
 	pp->setName = setName;
@@ -638,13 +656,21 @@ int BodySlideApp::LoadSliderSets() {
 	outFileCount.clear();
 
 	wxArrayString files;
+	wxString appDir = wxString::FromUTF8(Config["AppDir"]);
 	wxString projectPath = wxString::FromUTF8(GetProjectPath());
 	wxString gameDataPath = wxString::FromUTF8(Config["GameDataPath"]);
 
-	wxDir::GetAllFiles(projectPath + "/SliderSets", &files, "*.osp");
-	wxDir::GetAllFiles(projectPath + "/SliderSets", &files, "*.xml");
+	// Search local AppDir first
+	wxDir::GetAllFiles(appDir + "/SliderSets", &files, "*.osp");
+	wxDir::GetAllFiles(appDir + "/SliderSets", &files, "*.xml");
 
-	// Adiciona busca na pasta Data do jogo (CalienteTools/BodySlide/SliderSets)
+	// Search ProjectPath if different from AppDir
+	if (projectPath != appDir) {
+		wxDir::GetAllFiles(projectPath + "/SliderSets", &files, "*.osp");
+		wxDir::GetAllFiles(projectPath + "/SliderSets", &files, "*.xml");
+	}
+
+	// Search GameDataPath
 	if (!gameDataPath.empty()) {
 		wxDir::GetAllFiles(gameDataPath + "/CalienteTools/BodySlide/SliderSets", &files, "*.osp");
 		wxDir::GetAllFiles(gameDataPath + "/CalienteTools/BodySlide/SliderSets", &files, "*.xml");
@@ -1198,13 +1224,13 @@ static std::vector<ContinuousRange> FindContinuousRanges(const std::vector<uint1
 	for (; endIndex < source.size(); ++endIndex) {
 		int value = (int)source[endIndex];
 		if (value != lastValue + 1) {
-			ranges.emplace_back(ContinuousRange{ source[startIndex], endIndex - startIndex });
+			ranges.emplace_back(ContinuousRange{source[startIndex], endIndex - startIndex});
 			startIndex = endIndex;
 		}
 		lastValue = value;
 	}
 
-	ranges.emplace_back(ContinuousRange{ source[startIndex], endIndex - startIndex });
+	ranges.emplace_back(ContinuousRange{source[startIndex], endIndex - startIndex});
 
 	return ranges;
 }
@@ -2029,8 +2055,7 @@ std::vector<ShapePreviewData> BodySlideApp::ComputeMorphedShapeData(int weight) 
 
 void BodySlideApp::PostProcessPreview(std::vector<ShapePreviewData>& shapeData, int weight) {
 	// Apply clipping fix and handle external reference
-	bool useExternalReference = !multiProjectMode && referenceNif && preview &&
-							  (clippingFixStrength > 0.0f || preview->IsShowReferenceChecked());
+	bool useExternalReference = !multiProjectMode && referenceNif && preview && (clippingFixStrength > 0.0f || preview->IsShowReferenceChecked());
 
 	std::vector<Vector3> extRefVerts;
 	if (useExternalReference)
@@ -2322,28 +2347,32 @@ void BodySlideApp::ApplyReferenceNormals(NifFile& nif) {
 	for (auto& s : nif.GetShapes()) {
 		std::string shapeName = s->name.get();
 
-		if (refNormalsCache.find(shapeName) != refNormalsCache.end()) {
-			// Apply normals from file cache
-			NifFile& srcNif = refNormalsCache[shapeName];
-			nif.ApplyNormalsFromFile(srcNif, shapeName);
-		}
-		else {
-			// Check if reference normals file exists
-			wxString fileName = wxString::Format("%s/RefNormals/%s.nif", wxString::FromUTF8(Config["AppDir"]), wxString::FromUTF8(shapeName));
-			if (wxFile::Exists(fileName)) {
-				std::fstream file;
-				PlatformUtil::OpenFileStream(file, fileName.ToUTF8().data(), std::ios::in | std::ios::binary);
-
-				NifFile srcNif;
-				if (srcNif.Load(file) != 0)
-					continue;
-
-				// Apply normals from file
+		{
+			std::lock_guard<std::mutex> lock(refNormalsMutex);
+			if (refNormalsCache.find(shapeName) != refNormalsCache.end()) {
+				// Apply normals from file cache
+				NifFile& srcNif = refNormalsCache[shapeName];
 				nif.ApplyNormalsFromFile(srcNif, shapeName);
-
-				// Move file to cache
-				refNormalsCache[shapeName] = std::move(srcNif);
+				continue;
 			}
+		}
+
+		// Check if reference normals file exists
+		wxString fileName = wxString::Format("%s/RefNormals/%s.nif", wxString::FromUTF8(Config["AppDir"]), wxString::FromUTF8(shapeName));
+		if (wxFile::Exists(fileName)) {
+			std::fstream file;
+			PlatformUtil::OpenFileStream(file, fileName.ToUTF8().data(), std::ios::in | std::ios::binary);
+
+			NifFile srcNif;
+			if (srcNif.Load(file) != 0)
+				continue;
+
+			// Apply normals from file
+			nif.ApplyNormalsFromFile(srcNif, shapeName);
+
+			// Move file to cache
+			std::lock_guard<std::mutex> lock(refNormalsMutex);
+			refNormalsCache[shapeName] = std::move(srcNif);
 		}
 	}
 }
@@ -2767,10 +2796,16 @@ void BodySlideApp::SetPresetGroups(const std::string& setName) {
 
 void BodySlideApp::LoadAllGroups() {
 	wxLogMessage("Loading all slider groups...");
-	gCollection.LoadGroups(GetProjectPath() + "/SliderGroups");
-
-	// Adiciona busca na pasta Data do jogo
+	std::string appDir = Config["AppDir"];
+	std::string projectPath = GetProjectPath();
 	std::string gameDataPath = Config["GameDataPath"];
+
+	gCollection.LoadGroups(appDir + "/SliderGroups");
+
+	if (projectPath != appDir) {
+		gCollection.LoadGroups(projectPath + "/SliderGroups");
+	}
+
 	if (!gameDataPath.empty()) {
 		gCollection.LoadGroups(gameDataPath + "/CalienteTools/BodySlide/SliderGroups");
 	}
@@ -3003,10 +3038,19 @@ void BodySlideApp::LoadPresets(const std::string& sliderSet) {
 				groups_and_aliases.push_back(ag.first);
 	}
 
-	sliderManager.LoadPresets(GetProjectPath() + "/SliderPresets", outfit, groups_and_aliases, groups_and_aliases.empty());
-
-	// Adiciona busca na pasta Data do jogo
+	std::string appDir = Config["AppDir"];
+	std::string projectPath = GetProjectPath();
 	std::string gameDataPath = Config["GameDataPath"];
+
+	// Search local AppDir
+	sliderManager.LoadPresets(appDir + "/SliderPresets", outfit, groups_and_aliases, groups_and_aliases.empty());
+
+	// Search ProjectPath if different
+	if (projectPath != appDir) {
+		sliderManager.LoadPresets(projectPath + "/SliderPresets", outfit, groups_and_aliases, groups_and_aliases.empty());
+	}
+
+	// Search GameDataPath
 	if (!gameDataPath.empty()) {
 		sliderManager.LoadPresets(gameDataPath + "/CalienteTools/BodySlide/SliderPresets", outfit, groups_and_aliases, groups_and_aliases.empty());
 	}
@@ -3493,9 +3537,7 @@ int BodySlideApp::ShowBuildOverrideWithPreview(wxDialog* dlg, wxTreeListCtrl* tr
 			// Handle user closing the preview window via X button.
 			// Must cancel the async load thread before the panel is destroyed,
 			// otherwise the CallAfter callback could target the wrong panel.
-			conflictsPreviewWnd->Bind(wxEVT_CLOSE_WINDOW, [&](wxCloseEvent&) {
-				closeConflictsPreview();
-			});
+			conflictsPreviewWnd->Bind(wxEVT_CLOSE_WINDOW, [&](wxCloseEvent&) { closeConflictsPreview(); });
 
 			wxString title = wxString::Format(_("Preview - %s"), wxString::FromUTF8(treeListCtrl->GetItemText(groupItem)));
 			conflictsPreviewWnd->SetTitle(title);
@@ -3645,7 +3687,7 @@ int BodySlideApp::BuildListBodies(
 
 				treeListCtrl->Expand(rootItem);
 			}
-			
+
 			bool checkBoxReverting = false;
 			auto handler = [&](wxTreeListEvent& e) {
 				if (checkBoxReverting) {
@@ -3786,26 +3828,43 @@ int BodySlideApp::BuildListBodies(
 
 	refNormalsCache.clear();
 
+	// Pre-calculate slider values map for O(1) lookup
+	std::unordered_map<std::string, float> bigValues;
+	std::unordered_map<std::string, float> smallValues;
+	std::unordered_map<std::string, bool> sliderChanged;
+	for (const auto& s : sliderManager.slidersBig) {
+		bigValues[s.name] = s.value;
+		sliderChanged[s.name] = s.changed;
+	}
+	for (const auto& s : sliderManager.slidersSmall) {
+		smallValues[s.name] = s.value;
+	}
+
+	// Load BuildSelection once for all tasks
+	BuildSelectionFile buildSelFileGlobal;
+	BuildSelection buildSelectionGlobal;
+	GetBuildSelection(buildSelFileGlobal, buildSelectionGlobal);
+
 	wxProgressDialog progWnd(_("Processing Outfits"), _("Starting..."), 1000, sliderView, wxPD_AUTO_HIDE | wxPD_APP_MODAL | wxPD_ELAPSED_TIME);
 	progWnd.SetSize(400, 150);
 	float progstep = 1000.0f / outfitList.size();
 	std::atomic<int> count = 0;
+	std::mutex failedMutex;
+	std::mutex progMutex;
 
-#ifdef _PPL_H
-	concurrency::concurrent_unordered_map<std::string, std::string> failedOutfitsCon;
-#else
 	std::unordered_map<std::string, std::string> failedOutfitsCon;
-#endif
+	std::mutex buildMutex;
 
 	auto buildOutfit = [&](const std::string& outfit) {
-		wxString progMsg = wxString::Format(_("Processing '%s' (%d of %d)..."), wxString::FromUTF8(outfit), ++count, (int)outfitList.size());
-		progWnd.Update((int)(count * progstep) - 1, progMsg);
-		progWnd.Fit();
-
-		wxLogMessage(progMsg);
+		const auto& buildSelection = buildSelectionGlobal;
+		{
+			std::lock_guard<std::mutex> lock(progMutex);
+			count++;
+		}
 
 		/* Load set */
 		if (outfitNameSource.find(outfit) == outfitNameSource.end()) {
+			std::lock_guard<std::mutex> lock(failedMutex);
 			failedOutfitsCon[outfit] = _("No recorded outfit name source");
 			return;
 		}
@@ -3814,14 +3873,30 @@ int BodySlideApp::BuildListBodies(
 		DiffDataSets currentDiffs;
 
 		SliderSetFile sliderDoc;
-		sliderDoc.Open(outfitNameSource[outfit]);
+		std::string setFile;
+		{
+			// Safe access to outfitNameSource
+			auto it = outfitNameSource.find(outfit);
+			if (it != outfitNameSource.end())
+				setFile = it->second;
+		}
+
+		if (setFile.empty()) {
+			std::lock_guard<std::mutex> lock(failedMutex);
+			failedOutfitsCon[outfit] = _("No recorded outfit name source");
+			return;
+		}
+
+		sliderDoc.Open(setFile);
 		if (!sliderDoc.fail()) {
 			if (sliderDoc.GetSet(outfit, currentSet)) {
+				std::lock_guard<std::mutex> lock(failedMutex);
 				failedOutfitsCon[outfit] = _("Unable to get slider set from file: ") + outfitNameSource[outfit];
 				return;
 			}
 		}
 		else {
+			std::lock_guard<std::mutex> lock(failedMutex);
 			failedOutfitsCon[outfit] = _("Unable to open slider set file: ") + outfitNameSource[outfit];
 			return;
 		}
@@ -3857,6 +3932,7 @@ int BodySlideApp::BuildListBodies(
 		NifFile nifBig;
 		NifFile nifSmall;
 		if (nifBig.Load(file)) {
+			std::lock_guard<std::mutex> lock(failedMutex);
 			failedOutfitsCon[outfit] = _("Unable to load input nif: ") + currentSet.GetInputFileName();
 			return;
 		}
@@ -3865,11 +3941,6 @@ int BodySlideApp::BuildListBodies(
 			nifSmall.CopyFrom(nifBig);
 
 		currentSet.LoadSetDiffData(currentDiffs);
-
-		// Load BuildSelection file for zap choices
-		BuildSelectionFile buildSelFile;
-		BuildSelection buildSelection;
-		GetBuildSelection(buildSelFile, buildSelection);
 
 		bool keepZappedShapes = currentSet.KeepZappedShapes();
 
@@ -3891,18 +3962,28 @@ int BodySlideApp::BuildListBodies(
 			}
 
 			if (currentSet[s].bZap && !currentSet[s].bUV) {
-				float vbig = sliderManager.GetBigPresetValue(activePreset, name, currentSet[s].defBigValue / 100.0f);
-				for (auto& sliderBig : sliderManager.slidersBig) {
-					if (sliderBig.name == name && sliderBig.changed && !sliderBig.clamp) {
-						vbig = sliderBig.value;
-						break;
-					}
+				float vbig = 0.0f;
+				{
+					std::lock_guard<std::mutex> lock(buildMutex);
+					vbig = sliderManager.GetBigPresetValue(activePreset, name, currentSet[s].defBigValue / 100.0f);
 				}
+				auto it = bigValues.find(name);
+				if (it != bigValues.end() && sliderChanged[name])
+					vbig = it->second;
 
 				if (!currentSet[s].bHidden) {
 					// Apply stored zap choice for zaps visible to the user
-					if (buildSelection.HasZapChoice(currentSet.GetName(), name)) {
-						bool zapChoice = buildSelection.GetZapChoice(currentSet.GetName(), name);
+					// Apply stored zap choice for zaps visible to the user
+					bool hasZapChoice = false;
+					bool zapChoice = false;
+					{
+						std::lock_guard<std::mutex> lock(buildMutex);
+						if (buildSelection.HasZapChoice(currentSet.GetName(), name)) {
+							hasZapChoice = true;
+							zapChoice = buildSelection.GetZapChoice(currentSet.GetName(), name);
+						}
+					}
+					if (hasZapChoice) {
 						vbig = zapChoice ? 1.0f : 0.0f;
 					}
 				}
@@ -3946,22 +4027,22 @@ int BodySlideApp::BuildListBodies(
 				if (dn.empty())
 					continue;
 
-				vbig = sliderManager.GetBigPresetValue(activePreset, name, currentSet[s].defBigValue / 100.0f);
-				for (auto& sliderBig : sliderManager.slidersBig) {
-					if (sliderBig.name == name && sliderBig.changed && !sliderBig.clamp) {
-						vbig = sliderBig.value;
-						break;
-					}
+				{
+					std::lock_guard<std::mutex> lock(buildMutex);
+					vbig = sliderManager.GetBigPresetValue(activePreset, name, currentSet[s].defBigValue / 100.0f);
 				}
+				auto itBig = bigValues.find(name);
+				if (itBig != bigValues.end() && sliderChanged[name])
+					vbig = itBig->second;
 
 				if (currentSet.GenWeights()) {
-					vsmall = sliderManager.GetSmallPresetValue(activePreset, name, currentSet[s].defSmallValue / 100.0f);
-					for (auto& sliderSmall : sliderManager.slidersSmall) {
-						if (sliderSmall.name == name && sliderSmall.changed && !sliderSmall.clamp) {
-							vsmall = sliderSmall.value;
-							break;
-						}
+					{
+						std::lock_guard<std::mutex> lock(buildMutex);
+						vsmall = sliderManager.GetSmallPresetValue(activePreset, name, currentSet[s].defSmallValue / 100.0f);
 					}
+					auto itSmall = smallValues.find(name);
+					if (itSmall != smallValues.end() && sliderChanged[name])
+						vsmall = itSmall->second;
 				}
 
 				if (currentSet[s].bInvert) {
@@ -3973,8 +4054,17 @@ int BodySlideApp::BuildListBodies(
 				if (currentSet[s].bZap && !currentSet[s].bUV) {
 					if (!currentSet[s].bHidden) {
 						// Apply stored zap choice for zaps visible to the user
-						if (buildSelection.HasZapChoice(currentSet.GetName(), name)) {
-							bool zapChoice = buildSelection.GetZapChoice(currentSet.GetName(), name);
+						// Apply stored zap choice for zaps visible to the user
+						bool hasZapChoice = false;
+						bool zapChoice = false;
+						{
+							std::lock_guard<std::mutex> lock(buildMutex);
+							if (buildSelection.HasZapChoice(currentSet.GetName(), name)) {
+								hasZapChoice = true;
+								zapChoice = buildSelection.GetZapChoice(currentSet.GetName(), name);
+							}
+						}
+						if (hasZapChoice) {
 							vbig = zapChoice ? 1.0f : 0.0f;
 						}
 					}
@@ -4247,21 +4337,50 @@ int BodySlideApp::BuildListBodies(
 		}
 	};
 
-	// Multi-threading for 64-bit only due to memory limits of 32-bit builds
-#ifdef _PPL_H
-	// Parallel loop is run inside a task
-	auto buildTask = concurrency::create_task([&] { concurrency::parallel_for_each(outfitList.begin(), outfitList.end(), buildOutfit); });
+	// Secure worker queue pattern with throttling and main-thread UI monitoring
+	std::queue<std::string> outfitQueue;
+	for (auto& o : outfitList)
+		outfitQueue.push(o);
 
-	// Yield outside of task
-	while (!buildTask.is_done()) {
-		Yield();
-		wxMilliSleep(100);
+	std::mutex queueMutex;
+	std::vector<std::future<void>> futures;
+	unsigned int numThreads = std::thread::hardware_concurrency();
+	if (numThreads == 0)
+		numThreads = 2;
+
+	// Start worker threads
+	for (unsigned int i = 0; i < numThreads; ++i) {
+		futures.push_back(std::async(std::launch::async, [&]() {
+			while (true) {
+				std::string outfit;
+				{
+					std::lock_guard<std::mutex> lock(queueMutex);
+					if (outfitQueue.empty())
+						break;
+					outfit = outfitQueue.front();
+					outfitQueue.pop();
+				}
+				buildOutfit(outfit);
+			}
+		}));
 	}
-#else
-	for (auto& outfit : outfitList) {
-		buildOutfit(outfit);
+
+	// Main thread monitoring loop: safe UI updates and event processing
+	int lastProg = 0;
+	while (count < (int)outfitList.size()) {
+		int cur = count;
+		if (cur > lastProg) {
+			wxString progMsg = wxString::Format(_("Processed %d of %d..."), cur, (int)outfitList.size());
+			progWnd.Update((int)(cur * progstep), progMsg);
+			lastProg = cur;
+		}
+		wxSafeYield();
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
-#endif
+
+	// Ensure all threads are joined
+	for (auto& f : futures)
+		f.wait();
 
 	progWnd.Update(1000);
 
@@ -4341,10 +4460,7 @@ void BodySlideApp::GroupBuild(const std::vector<std::string>& groupNames) {
 		}
 
 		if (removedChoices > 0) {
-			wxLogMessage("Group build applied saved BuildSelection for output '%s': selected '%s', skipped %d conflicting choice(s).",
-						 outFile.first,
-						 outputChoice,
-						 removedChoices);
+			wxLogMessage("Group build applied saved BuildSelection for output '%s': selected '%s', skipped %d conflicting choice(s).", outFile.first, outputChoice, removedChoices);
 		}
 	}
 
@@ -4633,8 +4749,7 @@ void BodySlideFrame::OnEnterClose(wxKeyEvent& event) {
 
 void BodySlideFrame::OnEnterSliderWindow(wxMouseEvent& event) {
 	if (this->IsActive()) {
-		if (!this->FindFocus()->IsKindOf(wxClassInfo::FindClass("wxTextCtrl")) &&
-			!this->FindFocus()->IsKindOf(wxClassInfo::FindClass("wxSearchCtrl"))) {
+		if (!this->FindFocus()->IsKindOf(wxClassInfo::FindClass("wxTextCtrl")) && !this->FindFocus()->IsKindOf(wxClassInfo::FindClass("wxSearchCtrl"))) {
 			wxScrolledWindow* sw = (wxScrolledWindow*)event.GetEventObject();
 			sw->SetFocusIgnoringChildren();
 		}
@@ -4896,14 +5011,14 @@ void BodySlideFrame::OnSliderChange(wxScrollEvent& event) {
 		sd->sliderReadoutHi->ChangeValue(wxString::Format("%d%%", event.GetPosition()));
 
 	SetPresetChanged();
-	
+
 	// Preserva a posição do scroll para evitar pulos indesejados no Linux/GTK
 	int scrollX, scrollY;
 	sliderScroll->GetViewStart(&scrollX, &scrollY);
-	
+
 	app->UpdatePreview();
-	
-	// No Linux/GTK, o salto pode ocorrer de forma assíncrona. 
+
+	// No Linux/GTK, o salto pode ocorrer de forma assíncrona.
 	// Usamos CallAfter para garantir a restauração após o processamento da UI.
 	this->CallAfter([this, scrollX, scrollY]() {
 		if (this->sliderScroll)
@@ -5575,14 +5690,13 @@ void BodySlideFrame::OnBatchBuild(wxCommandEvent& WXUNUSED(event)) {
 		return;
 
 	if (app->clippingFixStrength > 0.0f) {
-		int answer = wxMessageBox(
-			_("Fix Clipping is enabled for this batch build.\n\n"
-			  "Use this carefully: applying clipping fixes to many outfits at once can create unwelcome side effects on some meshes.\n\n"
-			  "Consider building outfits one-by-one and checking each result in Preview.\n\n"
-			  "Do you want to continue with batch build?"),
-			_("Warning"),
-			wxYES_NO | wxNO_DEFAULT | wxICON_WARNING,
-			this);
+		int answer = wxMessageBox(_("Fix Clipping is enabled for this batch build.\n\n"
+									"Use this carefully: applying clipping fixes to many outfits at once can create unwelcome side effects on some meshes.\n\n"
+									"Consider building outfits one-by-one and checking each result in Preview.\n\n"
+									"Do you want to continue with batch build?"),
+								  _("Warning"),
+								  wxYES_NO | wxNO_DEFAULT | wxICON_WARNING,
+								  this);
 
 		if (answer != wxYES)
 			return;
@@ -5637,6 +5751,19 @@ void BodySlideFrame::OnBatchBuild(wxCommandEvent& WXUNUSED(event)) {
 
 	batchBuildList = XRCCTRL((*batchBuildChooser), "batchBuildList", wxCheckListBox);
 	batchBuildList->Bind(wxEVT_RIGHT_UP, &BodySlideFrame::OnBatchBuildContext, this);
+	batchBuildList->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& event) {
+		if (event.GetKeyCode() == WXK_SPACE) {
+			wxArrayInt selections;
+			batchBuildList->GetSelections(selections);
+			if (selections.GetCount() > 0) {
+				bool newState = !batchBuildList->IsChecked(selections[0]);
+				for (int sel : selections)
+					batchBuildList->Check(sel, newState);
+				return;
+			}
+		}
+		event.Skip();
+	});
 
 	batchBuildList->Append(oChoices);
 
@@ -5719,7 +5846,7 @@ void BodySlideFrame::OnBatchBuildContext(wxMouseEvent& WXUNUSED(event)) {
 	wxMenu* menu = wxXmlResource::Get()->LoadMenu("batchBuildContext");
 	if (menu) {
 		menu->Bind(wxEVT_MENU, &BodySlideFrame::OnBatchBuildSelect, this);
-		PopupMenu(menu);
+		batchBuildList->PopupMenu(menu);
 		delete menu;
 	}
 }
@@ -6087,7 +6214,13 @@ void BodySlideFrame::RefreshTargetGameState() {
 
 SliderCategoryUI::SliderCategoryUI() {}
 
-bool SliderCategoryUI::Create(wxScrolledWindow* scrollWindow, wxSizer* sliderLayout, wxSizer* categoryTabSizer, const std::string& name, const std::vector<std::string>& sliders, bool pEnabled, bool pOneSize) {
+bool SliderCategoryUI::Create(wxScrolledWindow* scrollWindow,
+							  wxSizer* sliderLayout,
+							  wxSizer* categoryTabSizer,
+							  const std::string& name,
+							  const std::vector<std::string>& sliders,
+							  bool pEnabled,
+							  bool pOneSize) {
 	categoryName = name;
 	sliderNames = sliders;
 
@@ -6286,7 +6419,7 @@ bool SliderDisplay::Create(wxScrolledWindow* scrollWindow,
 	sliderLo = new wxSlider(scrollWindow, wxID_ANY, 0, minValue, maxValue, wxDefaultPosition, wxSize(-1, scrollWindow->FromDIP(32)), wxSL_AUTOTICKS | wxSL_BOTTOM | wxSL_HORIZONTAL);
 	sliderLo->SetTickFreq(5);
 	sliderLo->SetName(nameStr + "|LO");
-	
+
 	// Redireciona o scroll do mouse para o painel de rolagem (Scroll manual no Linux)
 	sliderLo->Bind(wxEVT_MOUSEWHEEL, [scrollWindow](wxMouseEvent& event) {
 		int rotation = event.GetWheelRotation();

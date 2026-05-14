@@ -56,6 +56,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <atomic>
 #include <thread>
+#include <mutex>
 
 
 enum TargetGame { FO3, FONV, SKYRIM, FO4, SKYRIMSE, FO4VR, SKYRIMVR, FO76, OB, SF };
@@ -117,6 +118,7 @@ private:
 
 	/* Cache */
 	std::map<std::string, nifly::NifFile, case_insensitive_compare> refNormalsCache; // Cache for reference normals files
+	std::mutex refNormalsMutex;
 
 	struct ProjectData {
 		SliderSet sliderSet;

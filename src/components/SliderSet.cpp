@@ -8,6 +8,7 @@ See the included LICENSE file
 #include "../utils/StringStuff.h"
 
 #include <filesystem>
+#include <unordered_map>
 
 
 SliderSet::SliderSet() {}
@@ -80,7 +81,8 @@ int SliderSet::LoadSliderSet(XMLElement* element, bool appendNewSliders) {
 	std::string shapeStr = version >= 1 ? "Shape" : "BaseShapeName";
 	std::string dataFolderStr = version >= 1 ? "DataFolder" : "SetFolder";
 
-	name = element->Attribute("name");
+	const char* nameAttr = element->Attribute("name");
+	if (nameAttr) name = nameAttr;
 
 	XMLElement* tmpElement = element->FirstChildElement(dataFolderStr.c_str());
 	if (tmpElement) {
@@ -115,8 +117,9 @@ int SliderSet::LoadSliderSet(XMLElement* element, bool appendNewSliders) {
 		auto shapeText = shapeName->GetText();
 		if (shapeText) {
 			auto& shape = shapeAttributes[shapeText];
-			if (shapeName->Attribute("DataFolder")) {
-				std::string dataFolderAttr = ToOSSlashes(shapeName->Attribute("DataFolder"));
+			const char* dfAttr = shapeName->Attribute("DataFolder");
+			if (dfAttr) {
+				std::string dataFolderAttr = ToOSSlashes(dfAttr);
 				shape.dataFolders = SplitString(dataFolderAttr, ';');
 			}
 			else if (shape.dataFolders.empty())
@@ -133,25 +136,24 @@ int SliderSet::LoadSliderSet(XMLElement* element, bool appendNewSliders) {
 		shapeName = shapeName->NextSiblingElement(shapeStr.c_str());
 	}
 
+	std::unordered_map<std::string, size_t> sliderIndices;
+	for (size_t i = 0; i < sliders.size(); ++i)
+		sliderIndices[sliders[i].name] = i;
+
 	XMLElement* sliderEntry = element->FirstChildElement("Slider");
 	while (sliderEntry) {
 		SliderData tmpSlider;
 		if (tmpSlider.LoadSliderData(sliderEntry, genWeights) == 0) {
-			// Check if slider already exists
-			for (auto& s : sliders) {
-				if (s.name == tmpSlider.name) {
-					// Merge data of existing sliders
-					for (auto& df : tmpSlider.dataFiles)
-						s.AddDataFile(df.targetName, df.dataName, df.fileName, df.bLocal);
-
-					break;
-				}
-			}
-
-			if (appendNewSliders && !SliderExists(tmpSlider.name))
+			auto it = sliderIndices.find(tmpSlider.name);
+			if (it != sliderIndices.end()) {
+				SliderData& s = sliders[it->second];
+				for (auto& df : tmpSlider.dataFiles)
+					s.AddDataFile(df.targetName, df.dataName, df.fileName, df.bLocal);
+			} else if (appendNewSliders) {
+				sliderIndices[tmpSlider.name] = sliders.size();
 				sliders.push_back(std::move(tmpSlider));
+			}
 		}
-
 		sliderEntry = sliderEntry->NextSiblingElement("Slider");
 	}
 
@@ -332,26 +334,32 @@ void SliderSet::Merge(
 		ddf.bLocal = newDataLocal;
 	};
 
-	for (auto& s : mergeSet.sliders) {
-		auto sliderIt = std::find_if(sliders.begin(), sliders.end(), [&s](const SliderData& rs) { return rs.name == s.name; });
+	std::unordered_map<std::string, size_t> sliderIndices;
+	for (size_t i = 0; i < sliders.size(); ++i)
+		sliderIndices[sliders[i].name] = i;
 
-		if (sliderIt != sliders.end()) {
+	for (auto& s : mergeSet.sliders) {
+		auto sliderIt = sliderIndices.find(s.name);
+
+		if (sliderIt != sliderIndices.end()) {
+			SliderData& targetSlider = sliders[sliderIt->second];
 			// Copy missing data of existing slider
 			for (auto& sd : s.dataFiles) {
-				auto sliderDataIt = std::find_if(sliderIt->dataFiles.begin(), sliderIt->dataFiles.end(), [&](const DiffInfo& rd) {
+				auto sliderDataIt = std::find_if(targetSlider.dataFiles.begin(), targetSlider.dataFiles.end(), [&](const DiffInfo& rd) {
 					std::string shapeName = TargetToShape(rd.targetName);
 					std::string shapeNameMerge = mergeSet.TargetToShape(sd.targetName);
 					return rd.targetName == sd.targetName && rd.dataName == sd.dataName && shapeName == shapeNameMerge;
 				});
 
-				if (sliderDataIt == sliderIt->dataFiles.end()) {
-					size_t df = sliderIt->AddDataFile(sd.targetName, sd.dataName, sd.fileName, sd.bLocal);
-					addSlider(sliderIt->dataFiles[df]);
+				if (sliderDataIt == targetSlider.dataFiles.end()) {
+					size_t df = targetSlider.AddDataFile(sd.targetName, sd.dataName, sd.fileName, sd.bLocal);
+					addSlider(targetSlider.dataFiles[df]);
 				}
 			}
 		}
 		else if (appendNewSliders) {
 			// Copy new slider to the set
+			sliderIndices[s.name] = sliders.size();
 			sliders.push_back(s);
 			for (auto& ddf : sliders.back().dataFiles)
 				addSlider(ddf);
@@ -559,12 +567,14 @@ void SliderSetFile::Open(const std::string& srcFileName) {
 	version = root->IntAttribute("version");
 
 	XMLElement* setElement;
-	std::string setname;
 	setElement = root->FirstChildElement("SliderSet");
 	while (setElement) {
-		setname = setElement->Attribute("name");
-		setsInFile[setname] = setElement;
-		setsOrder.push_back(setname);
+		const char* nameAttr = setElement->Attribute("name");
+		if (nameAttr) {
+			std::string setname = nameAttr;
+			setsInFile[setname] = setElement;
+			setsOrder.push_back(setname);
+		}
 		setElement = setElement->NextSiblingElement("SliderSet");
 	}
 }

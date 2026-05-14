@@ -22,16 +22,16 @@ public:
 	BuildSelection() {}
 	BuildSelection(XMLElement* srcElement) { LoadBuildSelection(srcElement); }
 
-	bool HasOutputPath(const std::string& search);
-	bool HasZapChoice(const std::string& project, const std::string& zap);
+	bool HasOutputPath(const std::string& search) const;
+	bool HasZapChoice(const std::string& project, const std::string& zap) const;
 
-	std::map<std::string, std::string> GetOutputChoices();
-	std::string GetOutputChoice(const std::string& outputPath);
+	std::map<std::string, std::string> GetOutputChoices() const;
+	std::string GetOutputChoice(const std::string& outputPath) const;
 	void SetOutputChoice(const std::string& outputPath, const std::string& choice);
 	void RemoveOutputChoice(const std::string& outputPath);
 
-	std::map<ZapChoiceKey, bool> GetZapChoices();
-	bool GetZapChoice(const std::string& project, const std::string& zap);
+	std::map<ZapChoiceKey, bool> GetZapChoices() const;
+	bool GetZapChoice(const std::string& project, const std::string& zap) const;
 	void SetZapChoice(const std::string& project, const std::string& zap, bool choice);
 	void RemoveZapChoice(const std::string& project, const std::string& zap);
 

@@ -46,7 +46,7 @@ int BuildSelection::LoadBuildSelection(XMLElement* srcElement) {
 	return 0;
 }
 
-bool BuildSelection::HasOutputPath(const std::string& search) {
+bool BuildSelection::HasOutputPath(const std::string& search) const {
 	for (auto& c : outputChoice)
 		if (c.first.compare(search) == 0)
 			return true;
@@ -54,7 +54,7 @@ bool BuildSelection::HasOutputPath(const std::string& search) {
 	return false;
 }
 
-bool BuildSelection::HasZapChoice(const std::string& project, const std::string& zap) {
+bool BuildSelection::HasZapChoice(const std::string& project, const std::string& zap) const {
 	for (auto& c : zapChoice)
 		if (c.first.first.compare(project) == 0 && c.first.second.compare(zap) == 0)
 			return true;
@@ -62,15 +62,16 @@ bool BuildSelection::HasZapChoice(const std::string& project, const std::string&
 	return false;
 }
 
-std::map<std::string, std::string> BuildSelection::GetOutputChoices() {
+std::map<std::string, std::string> BuildSelection::GetOutputChoices() const {
 	return outputChoice;
 }
 
-std::string BuildSelection::GetOutputChoice(const std::string& outputPath) {
-	if (!HasOutputPath(outputPath))
+std::string BuildSelection::GetOutputChoice(const std::string& outputPath) const {
+	auto it = outputChoice.find(outputPath);
+	if (it == outputChoice.end())
 		return "";
 
-	return outputChoice[outputPath];
+	return it->second;
 }
 
 void BuildSelection::SetOutputChoice(const std::string& outputPath, const std::string& choice) {
@@ -81,15 +82,16 @@ void BuildSelection::RemoveOutputChoice(const std::string& outputPath) {
 	outputChoice.erase(outputPath);
 }
 
-std::map<ZapChoiceKey, bool> BuildSelection::GetZapChoices() {
+std::map<ZapChoiceKey, bool> BuildSelection::GetZapChoices() const {
 	return zapChoice;
 }
 
-bool BuildSelection::GetZapChoice(const std::string& project, const std::string& zap) {
-	if (!HasZapChoice(project, zap))
+bool BuildSelection::GetZapChoice(const std::string& project, const std::string& zap) const {
+	auto it = zapChoice.find({ project, zap });
+	if (it == zapChoice.end())
 		return false;
 
-	return zapChoice[{project, zap}];
+	return it->second;
 }
 
 void BuildSelection::SetZapChoice(const std::string& project, const std::string& zap, bool choice) {
