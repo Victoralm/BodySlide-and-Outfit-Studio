@@ -907,8 +907,18 @@ bool OutfitStudio::SetDefaultConfig() {
 			wxMessageBox(_("Failed to find game install path registry key or GameDataPath in the config."), _("Warning"), wxICON_WARNING);
 		}
 	}
-	else
+	else {
 		wxLogMessage("Game data path in config: %s", Config["GameDataPath"]);
+		std::string gdp = Config["GameDataPath"];
+		if (!gdp.empty()) {
+			if (gdp.back() != '/' && gdp.back() != '\\') gdp += "/";
+			if (!PlatformUtil::FileExists(gdp + "textures") && PlatformUtil::FileExists(gdp + "Data/textures")) {
+				gdp += "Data/";
+				Config.SetValue("GameDataPath", gdp);
+				wxLogMessage("Adjusted game data path to: %s", gdp);
+			}
+		}
+	}
 
 	if (!Config["OutputDataPath"].empty()) {
 		wxLogMessage("Output data path in config: %s", Config["OutputDataPath"]);

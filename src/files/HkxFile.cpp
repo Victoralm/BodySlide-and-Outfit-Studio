@@ -75,12 +75,8 @@ struct Buf {
 };
 
 bool ReadAllFile(const std::string& path, std::vector<uint8_t>& out) {
-#ifdef _WINDOWS
-	std::wstring wpath = PlatformUtil::MultiByteToWideUTF8(path);
-	std::ifstream ifs(wpath.c_str(), std::ios::binary);
-#else
-	std::ifstream ifs(path.c_str(), std::ios::binary);
-#endif
+	std::fstream ifs;
+	PlatformUtil::OpenFileStream(ifs, path, std::ios::in | std::ios::binary);
 	if (!ifs.is_open())
 		return false;
 	ifs.seekg(0, std::ios::end);

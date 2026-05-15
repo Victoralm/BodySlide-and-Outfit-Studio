@@ -2706,7 +2706,55 @@ int OutfitProject::LoadFromSliderSet(const std::string& fileName, const std::str
 		return 3;
 	}
 
-	activeSet.SetBaseDataPath(GetProjectPath() + PathSepStr + "ShapeData");
+	// Search for ShapeData in multiple locations: 
+	// 1. Relative to the .osp file itself (up one level from SliderSets)
+	// 2. GameDataPath
+	// 3. ProjectPath
+	// 4. AppDir
+	
+	std::string gameDataPath = Config["GameDataPath"];
+	std::string projectPath = GetProjectPath();
+	std::string appDir = Config["AppDir"];
+
+	wxFileName ospFile(wxString::FromUTF8(fileName));
+	std::string ospDir = ospFile.GetPath().ToUTF8().data();
+	
+	std::vector<std::string> searchPaths;
+	
+	// OSP-relative search: if .osp is in ".../SliderSets/", look in ".../ShapeData/"
+	if (ospFile.GetDirCount() > 0) {
+		wxFileName ospParent = ospFile;
+		ospParent.RemoveLastDir(); // Remove SliderSets
+		searchPaths.push_back(std::string(ospParent.GetPath().ToUTF8()) + "/ShapeData");
+	}
+
+	if (!gameDataPath.empty()) {
+		searchPaths.push_back(gameDataPath + "/CalienteTools/BodySlide/ShapeData");
+		// Also try with /Data/ if it's missing from GameDataPath
+		if (gameDataPath.find("Data") == std::string::npos) {
+			searchPaths.push_back(gameDataPath + "/Data/CalienteTools/BodySlide/ShapeData");
+		}
+	}
+	
+	searchPaths.push_back(projectPath + PathSepStr + "ShapeData");
+	if (appDir != projectPath)
+		searchPaths.push_back(appDir + PathSepStr + "ShapeData");
+
+
+	bool found = false;
+	for (const auto& path : searchPaths) {
+		activeSet.SetBaseDataPath(path);
+		std::string testPath = activeSet.GetInputFileName();
+		if (PlatformUtil::FileExists(testPath)) {
+			found = true;
+			break;
+		}
+	}
+
+	if (!found) {
+		// Fallback to ProjectPath if not found anywhere
+		activeSet.SetBaseDataPath(projectPath + PathSepStr + "ShapeData");
+	}
 
 	std::string inputNif = activeSet.GetInputFileName();
 
@@ -2801,7 +2849,55 @@ int OutfitProject::AddFromSliderSet(const std::string& fileName, const std::stri
 		return 2;
 	}
 
-	addSet.SetBaseDataPath(GetProjectPath() + PathSepStr + "ShapeData");
+	// Search for ShapeData in multiple locations: 
+	// 1. Relative to the .osp file itself (up one level from SliderSets)
+	// 2. GameDataPath
+	// 3. ProjectPath
+	// 4. AppDir
+	
+	std::string gameDataPath = Config["GameDataPath"];
+	std::string projectPath = GetProjectPath();
+	std::string appDir = Config["AppDir"];
+
+	wxFileName ospFile(wxString::FromUTF8(fileName));
+	std::string ospDir = ospFile.GetPath().ToUTF8().data();
+	
+	std::vector<std::string> searchPaths;
+	
+	// OSP-relative search: if .osp is in ".../SliderSets/", look in ".../ShapeData/"
+	if (ospFile.GetDirCount() > 0) {
+		wxFileName ospParent = ospFile;
+		ospParent.RemoveLastDir(); // Remove SliderSets
+		searchPaths.push_back(std::string(ospParent.GetPath().ToUTF8()) + "/ShapeData");
+	}
+
+	if (!gameDataPath.empty()) {
+		searchPaths.push_back(gameDataPath + "/CalienteTools/BodySlide/ShapeData");
+		// Also try with /Data/ if it's missing from GameDataPath
+		if (gameDataPath.find("Data") == std::string::npos) {
+			searchPaths.push_back(gameDataPath + "/Data/CalienteTools/BodySlide/ShapeData");
+		}
+	}
+	
+	searchPaths.push_back(projectPath + PathSepStr + "ShapeData");
+	if (appDir != projectPath)
+		searchPaths.push_back(appDir + PathSepStr + "ShapeData");
+
+
+	bool found = false;
+	for (const auto& path : searchPaths) {
+		addSet.SetBaseDataPath(path);
+		std::string testPath = addSet.GetInputFileName();
+		if (PlatformUtil::FileExists(testPath)) {
+			found = true;
+			break;
+		}
+	}
+
+	if (!found) {
+		// Fallback to ProjectPath if not found anywhere
+		addSet.SetBaseDataPath(projectPath + PathSepStr + "ShapeData");
+	}
 	std::string inputNif = addSet.GetInputFileName();
 
 	std::map<std::string, std::string> renamedShapes;

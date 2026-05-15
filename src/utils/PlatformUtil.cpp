@@ -61,13 +61,16 @@ std::wstring MultiByteToWideUTF8(const std::string& str) {
 }
 #endif
 
+#include <wx/log.h>
+
 void OpenFileStream(std::fstream& file, const std::string& fileName, std::ios_base::openmode mode) {
 #ifdef _WINDOWS
 	// Convert to std::wstring on Windows only
 	file.open(MultiByteToWideUTF8(fileName).c_str(), mode);
 #else
 	std::string fn_nobs = backslash_to_slash(fileName);
-	file.open(fn_nobs.c_str(), mode);
+	std::string resolvedPath = FindFilePathCaseInsensitive(fn_nobs);
+	file.open(resolvedPath.c_str(), mode);
 #endif
 }
 
@@ -112,7 +115,7 @@ std::string FindFilePathCaseInsensitive(const std::string& path) {
 		current = target.root_path();
 
 	for (auto& part : target) {
-		if (part == target.root_path() || part.string() == "/") continue;
+		if (part == target.root_path() || part.string() == "/" || part.string() == "") continue;
 		
 		bool found = false;
 		if (fs::exists(current / part)) {
@@ -124,21 +127,23 @@ std::string FindFilePathCaseInsensitive(const std::string& path) {
 			std::transform(partLower.begin(), partLower.end(), partLower.begin(), ::tolower);
 			
 			if (fs::is_directory(current)) {
-				for (const auto& entry : fs::directory_iterator(current)) {
-					std::string entryName = entry.path().filename().string();
-					std::string entryLower = entryName;
-					std::transform(entryLower.begin(), entryLower.end(), entryLower.begin(), ::tolower);
-					
-					if (entryLower == partLower) {
-						current /= entryName;
-						found = true;
-						break;
+				try {
+					for (const auto& entry : fs::directory_iterator(current)) {
+						std::string entryName = entry.path().filename().string();
+						std::string entryLower = entryName;
+						std::transform(entryLower.begin(), entryLower.end(), entryLower.begin(), ::tolower);
+						
+						if (entryLower == partLower) {
+							current /= entryName;
+							found = true;
+							break;
+						}
 					}
+				} catch (const fs::filesystem_error&) {
 				}
 			}
 		}
 		if (!found) {
-			wxLogMessage("FindFilePathCaseInsensitive: Failed to find part '%s' in '%s'", part.string(), current.string());
 			return p;
 		}
 	}

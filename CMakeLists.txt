@@ -421,7 +421,7 @@ elseif(UNIX AND NOT APPLE)
 	target_link_options(BodySlide PRIVATE -rdynamic)
 endif()
 
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
 	set_target_properties(OutfitStudio PROPERTIES OUTPUT_NAME "OutfitStudio x64")
 	set_target_properties(BodySlide PROPERTIES OUTPUT_NAME "BodySlide x64")
 else()
