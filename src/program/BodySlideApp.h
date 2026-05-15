@@ -106,7 +106,9 @@ private:
 
 	/* Data Items */
 	std::map<std::string, std::string, case_insensitive_compare> outfitNameSource; // All currently defined outfits.
-	std::vector<std::string> outfitNameOrder;									   // All currently defined outfits, in their order of appearance.
+	std::vector<std::string> outfitNameOrder;
+	std::unordered_map<std::string, std::string> outfitNamesLower;
+									   // All currently defined outfits, in their order of appearance.
 	std::vector<std::string> outfitHasZaps;										   // All currently defined outfits that have visible zaps.
 	std::map<std::string, std::vector<std::string>> groupMembers;				   // All currently defined groups.
 	std::map<std::string, std::string> groupAlias;								   // Group name aliases.
@@ -378,8 +380,12 @@ public:
 	std::unordered_map<std::string, SliderCategoryUI*> sliderCategories;
 
 	wxTimer delayLoad;
+	wxTimer outfitFilterTimer;
+	wxString lastFilterText;
+	bool isPopulatingOutfitList = false;
+	std::vector<wxString> outfitNamesWX;
 
-	wxChoice* outfitChoice = nullptr;
+	wxComboBox* outfitChoice = nullptr;
 	wxChoice* presetChoice = nullptr;
 	wxButton* btnSavePreset = nullptr;
 	wxSearchCtrl* search = nullptr;
@@ -457,6 +463,8 @@ private:
 	void OnSliderReadoutChange(wxCommandEvent& event);
 	void OnSearchChange(wxCommandEvent& event);
 	void OnOutfitSearchChange(wxCommandEvent& event);
+	void OnOutfitComboText(wxCommandEvent& event);
+	void OnOutfitFilterTimer(wxTimerEvent& event);
 
 	void OnSliderFilterChanged(wxCommandEvent&);
 	void OnPresetFilterChanged(wxCommandEvent&);

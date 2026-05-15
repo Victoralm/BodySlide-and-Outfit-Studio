@@ -69,7 +69,9 @@ wxBEGIN_EVENT_TABLE(BodySlideFrame, wxFrame)
 	EVT_TEXT_ENTER(XRCID("presetFilter"), BodySlideFrame::OnPresetFilterChanged)
 	EVT_TEXT(XRCID("presetFilter"), BodySlideFrame::OnPresetFilterChanged)
 	EVT_TIMER(DELAYLOAD_TIMER, BodySlideFrame::OnDelayLoad)
-	EVT_CHOICE(XRCID("outfitChoice"), BodySlideFrame::OnChooseOutfit)
+	EVT_TIMER(1002, BodySlideFrame::OnOutfitFilterTimer)
+	EVT_COMBOBOX(XRCID("outfitChoice"), BodySlideFrame::OnChooseOutfit)
+	EVT_TEXT(XRCID("outfitChoice"), BodySlideFrame::OnOutfitComboText)
 	EVT_CHOICE(XRCID("presetChoice"), BodySlideFrame::OnChoosePreset)
 
 	EVT_BUTTON(XRCID("btnDeleteProject"), BodySlideFrame::OnDeleteProject)
@@ -733,6 +735,14 @@ int BodySlideApp::LoadSliderSets() {
 		gCollection.GetOutfitGroups(o.first, groups);
 		if (groups.empty())
 			ungroupedOutfits.push_back(o.first);
+	}
+
+	outfitNamesLower.clear();
+	sliderView->outfitNamesWX.clear();
+	for (const auto& name : outfitNameOrder) {
+		wxString s = wxString::FromUTF8(name);
+		outfitNamesLower[name] = s.Lower().ToUTF8().data();
+		sliderView->outfitNamesWX.push_back(s);
 	}
 
 	return 0;
@@ -2881,6 +2891,9 @@ void BodySlideApp::PopulateFilterData() {
 }
 
 void BodySlideApp::ApplyOutfitFilter() {
+	if (!sliderView || !sliderView->outfitChoice || !sliderView->outfitsearch || !sliderView->search)
+		return;
+
 	filteredOutfits.clear();
 
 	std::unordered_set<std::string> grpFiltOutfits;
@@ -2905,6 +2918,20 @@ void BodySlideApp::ApplyOutfitFilter() {
 
 	wxString grpSrch = sliderView->search->GetValue();
 	std::string outfitSrch{sliderView->outfitsearch->GetValue()};
+	
+	// Consider text typed directly in the outfit dropdown as well
+	std::string comboSrch{sliderView->outfitChoice->GetValue().ToUTF8()};
+	
+	// If the combo text is not one of the existing items exactly, treat it as a filter
+	bool useComboFilter = true;
+	if (comboSrch.empty()) {
+		useComboFilter = false;
+	} else {
+		// Check if it matches exactly any existing outfit (to avoid filtering out the selection)
+		if (outfitNameSource.find(comboSrch) != outfitNameSource.end()) {
+			useComboFilter = false;
+		}
+	}
 
 	if (lastGrps != grpSrch) {
 		grouplist.clear();
@@ -2956,32 +2983,61 @@ void BodySlideApp::ApplyOutfitFilter() {
 	}
 
 
-	if (outfitSrch.empty()) {
+	if (outfitSrch.empty() && !useComboFilter) {
 		for (auto& w : workFilterList)
 			filteredOutfits.push_back(w);
 	}
 	else {
 		wxString searchStr = wxString::FromUTF8(outfitSrch);
 		searchStr.MakeLower();
+		
+		wxString comboSearchStr = wxString::FromUTF8(comboSrch);
+		comboSearchStr.MakeLower();
 
 		if (regexFilterOutfits) {
 			std::regex re;
+			std::regex reCombo;
+			bool hasComboRe = false;
+			bool hasPrimaryRe = false;
+
+			try {
+				if (!outfitSrch.empty()) {
+					re.assign(outfitSrch, std::regex::icase);
+					hasPrimaryRe = true;
+				}
+				if (useComboFilter) {
+					reCombo.assign(comboSrch, std::regex::icase);
+					hasComboRe = true;
+				}
+			} catch (std::regex_error&) {}
 
 			for (auto& filterEntry : workFilterList) {
-				try {
-					re.assign(outfitSrch, std::regex::icase);
-					if (std::regex_search(filterEntry, re))
-						filteredOutfits.push_back(filterEntry);
-				}
-				catch (std::regex_error&) {
-				}
+				bool match = true;
+				if (hasPrimaryRe && !std::regex_search(filterEntry, re))
+					match = false;
+				if (match && hasComboRe && !std::regex_search(filterEntry, reCombo))
+					match = false;
+				
+				if (match)
+					filteredOutfits.push_back(filterEntry);
 			}
 		}
 		else {
-			for (auto& filterEntry : workFilterList) {
-				wxString entryStr = wxString::FromUTF8(filterEntry);
-				if (entryStr.Lower().Contains(searchStr))
-					filteredOutfits.push_back(entryStr.ToUTF8().data());
+			std::string searchStrStd = searchStr.ToUTF8().data();
+			std::string comboSearchStrStd = comboSearchStr.ToUTF8().data();
+			
+			for (const auto& filterEntry : workFilterList) {
+				const std::string& entryLower = outfitNamesLower[filterEntry];
+				
+				bool match = true;
+				if (!outfitSrch.empty() && entryLower.find(searchStrStd) == std::string::npos)
+					match = false;
+				
+				if (match && useComboFilter && entryLower.find(comboSearchStrStd) == std::string::npos)
+					match = false;
+
+				if (match)
+					filteredOutfits.push_back(filterEntry);
 			}
 		}
 	}
@@ -4552,7 +4608,7 @@ int BodySlideApp::SaveSliderPositions(const std::string& outputFile, const std::
 }
 
 BodySlideFrame::BodySlideFrame(BodySlideApp* a, const wxSize& size)
-	: delayLoad(this, DELAYLOAD_TIMER) {
+	: delayLoad(this, DELAYLOAD_TIMER), outfitFilterTimer(this, 1002) {
 	app = a;
 
 	wxXmlResource* xrc = wxXmlResource::Get();
@@ -4619,7 +4675,9 @@ BodySlideFrame::BodySlideFrame(BodySlideApp* a, const wxSize& size)
 	// Listen for pop-out events from the preview panel
 	splitter->Bind(EVT_PREVIEW_POPOUT, &BodySlideFrame::OnPreviewPopout, this);
 
-	outfitChoice = (wxChoice*)FindWindowByName("outfitChoice", this);
+	outfitChoice = XRCCTRL(*this, "outfitChoice", wxComboBox);
+	if (outfitChoice)
+		outfitChoice->Bind(wxEVT_TEXT, &BodySlideFrame::OnOutfitComboText, this);
 	presetChoice = (wxChoice*)FindWindowByName("presetChoice", this);
 	btnSavePreset = (wxButton*)FindWindowByName("btnSavePreset", this);
 
@@ -4866,8 +4924,15 @@ void BodySlideFrame::PopulateOutfitList(const wxArrayString& items, const wxStri
 	if (!outfitChoice)
 		return;
 
+	isPopulatingOutfitList = true;
+	wxString currentText = outfitChoice->GetValue();
+	long from = 0, to = 0;
+	outfitChoice->GetSelection(&from, &to);
+
+	outfitChoice->Freeze();
 	outfitChoice->Clear();
 	outfitChoice->Append(items);
+
 	if (!outfitChoice->SetStringSelection(selectItem)) {
 		int i = wxNOT_FOUND;
 		if (selectItem.empty())
@@ -4878,6 +4943,35 @@ void BodySlideFrame::PopulateOutfitList(const wxArrayString& items, const wxStri
 			i = outfitChoice->Append(selectItem);
 
 		outfitChoice->SetSelection(i);
+	}
+
+	// Restore text and cursor if user is typing
+	if (outfitChoice->HasFocus() && !currentText.empty() && !app->OutfitExists(currentText.ToUTF8().data())) {
+		outfitChoice->ChangeValue(currentText);
+		outfitChoice->SetSelection(from, to);
+	}
+	outfitChoice->Thaw();
+	isPopulatingOutfitList = false;
+}
+
+void BodySlideFrame::OnOutfitComboText(wxCommandEvent& WXUNUSED(event)) {
+	if (isPopulatingOutfitList || !outfitChoice) return;
+
+	wxString currentText = outfitChoice->GetValue();
+	if (currentText == lastFilterText)
+		return;
+
+	outfitFilterTimer.Start(500, true);
+}
+
+void BodySlideFrame::OnOutfitFilterTimer(wxTimerEvent& WXUNUSED(event)) {
+	if (isPopulatingOutfitList || !outfitChoice) return;
+
+	lastFilterText = outfitChoice->GetValue();
+	app->PopulateOutfitList("");
+	
+	if (outfitChoice->HasFocus() && !outfitChoice->GetValue().empty()) {
+		outfitChoice->Popup();
 	}
 }
 
@@ -5436,6 +5530,8 @@ void BodySlideFrame::OnFilterHasZaps(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void BodySlideFrame::OnChooseOutfit(wxCommandEvent& event) {
+	outfitFilterTimer.Stop();
+	lastFilterText = event.GetString();
 	std::string sstr{event.GetString().ToUTF8()};
 	app->ActivateOutfit(sstr);
 }
